@@ -292,6 +292,8 @@
   .ctxmenu .item.disabled { color: #c0c4cc; cursor: default; }
   .ctxmenu .item.disabled:hover { background: transparent; color: #c0c4cc; }
   .ctxmenu .sep { height: 1px; background: #eff0f1; margin: 4px 6px; }
+  .ctxmenu .item.danger { color: #1f2329; }
+  .ctxmenu .item.danger:hover { background: #fff1f0; color: #f54a45; }
 
   /* 行右键高亮 */
   tbody tr.ctx-active td { background: #eef4ff !important; }
@@ -1354,6 +1356,12 @@ function showCellMenu(ev, inp) {
   cellMenuTarget = inp;
   const menu = document.getElementById('cellMenu');
 
+  // 找到这个单元格所在的行
+  const tr = inp.closest('tr');
+  const rowIdx = tr ? [...document.getElementById('tbody').children].indexOf(tr) : -1;
+  const row = (rowIdx >= 0) ? state.rows[rowIdx] : null;
+  cellMenuRowId = row ? row.id : null;
+
   // 有选中内容才能剪切/复制
   const hasSel = inp.selectionStart !== inp.selectionEnd;
   const hasVal = inp.value.length > 0;
@@ -1362,13 +1370,19 @@ function showCellMenu(ev, inp) {
     { act: 'cut',   ico: '✂', text: '剪切',   disabled: !hasSel },
     { act: 'copy',  ico: '⧉', text: '复制',   disabled: !hasSel && !hasVal },
     { act: 'paste', ico: '📋', text: '粘贴',   disabled: false },
+    { sep: true },
+    { act: 'insertAbove', ico: '⬆', text: '在上方插入一行', disabled: !row },
+    { act: 'insertBelow', ico: '⬇', text: '在下方插入一行', disabled: !row },
+    { sep: true },
+    { act: 'deleteRow', ico: '🗑', text: '删除这一行', disabled: !row, danger: true },
   ];
 
-  menu.innerHTML = items.map(it =>
-    `<div class="item ${it.disabled ? 'disabled' : ''}" data-act="${it.act}">
+  menu.innerHTML = items.map(it => {
+    if (it.sep) return '<div class="sep"></div>';
+    return `<div class="item ${it.disabled ? 'disabled' : ''} ${it.danger ? 'danger' : ''}" data-act="${it.act}">
        <span class="ico">${it.ico}</span>${it.text}
-     </div>`
-  ).join('');
+     </div>`;
+  }).join('');
 
   menu.querySelectorAll('.item').forEach(el => {
     if (el.classList.contains('disabled')) return;
@@ -1376,17 +1390,24 @@ function showCellMenu(ev, inp) {
   });
 
   menu.classList.add('show');
-  const mw = 150, mh = 130;
+
+  // 动态计算菜单高度，避免超出窗口
+  const rect = menu.getBoundingClientRect();
+  const mw = rect.width || 170;
+  const mh = rect.height || 280;
   let x = ev.clientX, y = ev.clientY;
   if (x + mw > window.innerWidth) x = window.innerWidth - mw - 8;
-  if (y + mh > window.innerHeight) y = window.innerHeight - mh - 8;
+  if (y + mh > window.innerHeight) y = Math.max(8, window.innerHeight - mh - 8);
   menu.style.left = x + 'px';
   menu.style.top = y + 'px';
 }
 
+let cellMenuRowId = null;
+
 function hideCellMenu() {
   document.getElementById('cellMenu').classList.remove('show');
   cellMenuTarget = null;
+  cellMenuRowId = null;
 }
 
 async function doCellAction(act) {
@@ -1442,6 +1463,55 @@ async function doCellAction(act) {
     } else {
       pasteGrid(inp, text);
     }
+    return;
+  }
+
+  /* ---- 行操作（通过单元格右键触发）---- */
+  if (act === 'insertAbove' || act === 'insertBelow' || act === 'deleteRow') {
+    const id = cellMenuRowId;
+    if (!id) { toast('没找到要操作的行'); return; }
+
+    const idx = state.rows.findIndex(r => r.id === id);
+    if (idx < 0) { toast('没找到要操作的行'); return; }
+
+    // 先取出需要的信息，因为后面会 hideCellMenu 清空 cellMenuRowId
+    if (act === 'deleteRow') {
+      const row = state.rows[idx];
+      const label = (row.name || '').trim() || (row.actor || '').trim() || `第 ${idx + 1} 行`;
+      if (!confirm(`确定删除这一行？\n\n「${label}」\n\n删除后该行的分数也会一起清除。`)) return;
+
+      state.rows.splice(idx, 1);
+      // 保持总行数不变，末尾补一行
+      state.rows.push(makeEmptyRow(state.rows.length + 1));
+      save();
+      renderBody();
+      toast('已删除该行');
+      return;
+    }
+
+    // 插入
+    const insertAt = act === 'insertAbove' ? idx : idx + 1;
+    state.rows.splice(insertAt, 0, makeEmptyRow(0));
+
+    // 非抽签模式重排序号
+    if (!state.drawOrder) {
+      state.rows.forEach((r, i) => { r.no = i + 1; });
+    }
+
+    save();
+    renderBody();
+
+    // 滚动到新行并聚焦
+    setTimeout(() => {
+      const tr = document.querySelectorAll('#tbody tr')[insertAt];
+      if (tr) {
+        tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const first = tr.querySelector('input.cell.text');
+        if (first) first.focus();
+      }
+    }, 40);
+
+    toast(act === 'insertAbove' ? '已在上方插入一行' : '已在下方插入一行');
   }
 }
 
