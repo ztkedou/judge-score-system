@@ -475,9 +475,9 @@
 
     <div class="btnrow">
       <span class="lbl">奖项名额</span>
-      <span class="field">第Ⅰ名 <input type="number" id="aw1" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
-      <span class="field">第Ⅱ名 <input type="number" id="aw2" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
-      <span class="field">第Ⅲ名 <input type="number" id="aw3" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第1名 <input type="number" id="aw1" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第2名 <input type="number" id="aw2" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第3名 <input type="number" id="aw3" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
       <span style="font-size:12px;color:#8f959e">（都填 0 = 不设奖项，直接按分数排名）</span>
     </div>
 
@@ -1407,7 +1407,7 @@ function refreshStats() {
       } else {
         const award = awardMap[row.id];
         if (award) {
-          const cls = award === '第Ⅰ名' ? 'g1' : award === '第Ⅱ名' ? 'g2' : 'g3';
+          const cls = award === '第1名' ? 'g1' : award === '第2名' ? 'g2' : 'g3';
           tdRank.innerHTML = `<span class="rank-tag ${cls}">${award}</span>`;
         } else {
           tdRank.innerHTML = `<span class="rank-tag plain">${rk}</span>`;
@@ -1418,7 +1418,7 @@ function refreshStats() {
 }
 
 /* ---------------- 奖项计算 ----------------
-   按排名分配：前 N1 个是第Ⅰ名，接着 N2 个第Ⅱ名，接着 N3 个第Ⅲ名
+   按排名分配：前 N1 个是第1名，接着 N2 个第2名，接着 N3 个第3名
    其余不显示奖项，只显示数字名次
 ------------------------------------------- */
 function computeAwards(rankMap) {
@@ -1434,13 +1434,13 @@ function computeAwards(rankMap) {
   const map = {};
   let idx = 0;
   for (let i = 0; i < first && idx < entries.length; i++, idx++) {
-    map[entries[idx].id] = '第Ⅰ名';
+    map[entries[idx].id] = '第1名';
   }
   for (let i = 0; i < second && idx < entries.length; i++, idx++) {
-    map[entries[idx].id] = '第Ⅱ名';
+    map[entries[idx].id] = '第2名';
   }
   for (let i = 0; i < third && idx < entries.length; i++, idx++) {
-    map[entries[idx].id] = '第Ⅲ名';
+    map[entries[idx].id] = '第3名';
   }
   return map;
 }
@@ -3344,8 +3344,8 @@ function exportImage() {
         ctx.textAlign = 'center';
         ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
         if (award) {
-          const bg = award === '第Ⅰ名' ? '#fff3d6' : award === '第Ⅱ名' ? '#eef1f6' : '#fbe9e2';
-          const fg = award === '第Ⅰ名' ? '#a8701a' : award === '第Ⅱ名' ? '#5a6474' : '#a45a2f';
+          const bg = award === '第1名' ? '#fff3d6' : award === '第2名' ? '#eef1f6' : '#fbe9e2';
+          const fg = award === '第1名' ? '#a8701a' : award === '第2名' ? '#5a6474' : '#a45a2f';
           ctx.fillStyle = bg;
           const tw = ctx.measureText(award).width + 14;
           ctx.fillRect(x + (col.width - tw) / 2, y + 8, tw, rowH - 16);
