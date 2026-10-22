@@ -45,7 +45,7 @@ def main():
     print(f"存在: {TARGET.exists()}")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(channel="chrome")
         ctx = browser.new_context(viewport={"width": 1500, "height": 1100},
                                   accept_downloads=True,
                                   permissions=["clipboard-read", "clipboard-write"])
@@ -302,6 +302,7 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 
 
 

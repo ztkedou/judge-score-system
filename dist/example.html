@@ -117,6 +117,19 @@
   .export-cols-label { font-size: 12px; color: #646a73; margin-right: 4px; }
   .export-cols .chk { font-size: 13px; padding: 3px 7px; }
 
+  /* 自定义列标签 */
+  .custom-col-list { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .custom-col-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #eef4ff; color: #1d4ed8; border-radius: 4px;
+    padding: 3px 8px; font-size: 12px;
+  }
+  .custom-col-tag .x {
+    cursor: pointer; color: #64748b; font-size: 14px; line-height: 1;
+    padding: 0 2px;
+  }
+  .custom-col-tag .x:hover { color: #f54a45; }
+
   /* 现场抽签顺序：高亮行 */
   .highlight-row {
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -368,6 +381,9 @@
       <button onclick="sortByNo()">序号排序</button>
       <button onclick="sortByScore()">分数排序</button>
       <span class="sep"></span>
+      <button id="btnUndo" onclick="undo()" disabled title="撤销  Ctrl+Z">↶ 撤销</button>
+      <button id="btnRedo" onclick="redo()" disabled title="重做  Ctrl+Y">↷ 重做</button>
+      <span class="sep"></span>
       <button onclick="resetSettings()">恢复默认设置</button>
       <button class="danger" onclick="clearAll()">清空全部</button>
     </div>
@@ -411,6 +427,16 @@
       <label class="chk"><input type="checkbox" id="chkHasUnit" onchange="onHasUnitChange()"> 有选送单位</label>
       <label class="chk"><input type="checkbox" id="chkHideScores" onchange="onHideScoresChange()"> 隐藏评委打分</label>
       <label class="chk"><input type="checkbox" id="chkShowAdjust" onchange="onShowAdjustChange()"> 分数修正 / 最终成绩</label>
+    </div>
+
+    <!-- 自定义列 -->
+    <div class="btnrow" style="margin-top:10px">
+      <span class="lbl">自定义列</span>
+      <input type="text" id="customColInput" class="num-input" style="width:120px;text-align:left"
+             placeholder="如：编导"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomCol();}">
+      <button onclick="addCustomCol()">＋ 增加</button>
+      <span id="customColList" class="custom-col-list"></span>
     </div>
   </div>
 
@@ -531,12 +557,22 @@
 
 const STORE_KEY = 'example_score_v1';   // 独立存储，不与通用版冲突
 
-// 文本列定义（可互换）
+// 内置文本列定义（可互换）
 const TEXT_COLS = {
   name:  { key: 'name',  label: '节目名称' },
   actor: { key: 'actor', label: '表演团队' },
   unit:  { key: 'unit',  label: '选送单位' }
 };
+
+/* 自定义列：key 形如 custom_1、custom_2...
+   定义存在 state.customCols = [{key:'custom_1', label:'编导'}, ...] */
+
+// 取某列的显示名（内置 + 自定义）
+function colLabel(key) {
+  if (TEXT_COLS[key]) return TEXT_COLS[key].label;
+  const c = (state.customCols || []).find(x => x.key === key);
+  return c ? c.label : key;
+}
 
 let state = {
   maxScore: 10,          // 10 | 100
@@ -549,12 +585,13 @@ let state = {
   showAdjust: true,      // 显示「分数修正 / 最终成绩」两列（本示例默认开）
   awards: { first: 0, second: 0, third: 0 },
   textOrder: ['name', 'actor', 'unit'],   // 节目名称 / 表演团队 / 选送单位
+  customCols: [],        // 自定义列 [{key, label}]
   title: '',             // 活动题目（空则用默认标题）
   exportCols: {          // 导出/打印时包含哪些列
     no: true, name: true, actor: true, unit: false,
     scores: false, avg: true, adjust: true, final: true, rank: true
   },
-  rows: []               // { id, no, name, actor, unit, scores: [raw...] }
+  rows: []               // { id, no, name, actor, unit, scores: [raw...], custom_1: '...' }
 };
 
 let lastColMenuTarget = null;
@@ -564,6 +601,140 @@ function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
   } catch (e) { /* 忽略 */ }
+  // 记录快照供撤销
+  takeSnapshot();
+}
+
+/* ============================================================
+   撤销 / 重做
+   - 每次状态变化记一个快照
+   - 防抖 400ms，连续输入合并成一步
+   - 步数不设上限（保留最近 2000 步防内存爆）
+   ============================================================ */
+let undoStack = [];        // 历史快照（字符串）
+let redoStack = [];        // 重做栈
+let lastSnapshot = '';     // 当前快照
+let snapshotTimer = null;
+let isRestoring = false;   // 正在恢复快照，不要再记录
+
+function takeSnapshot(immediate) {
+  if (isRestoring) return;
+
+  const doIt = () => {
+    if (isRestoring) return;
+    let snap;
+    try { snap = JSON.stringify(state); } catch (e) { return; }
+    if (snap === lastSnapshot) return;   // 没变化，不存
+
+    if (lastSnapshot) {
+      undoStack.push(lastSnapshot);
+      if (undoStack.length > 2000) undoStack.shift();
+    }
+    lastSnapshot = snap;
+    redoStack = [];   // 有新操作，重做栈失效
+    updateUndoButtons();
+  };
+
+  if (snapshotTimer) { clearTimeout(snapshotTimer); snapshotTimer = null; }
+
+  if (immediate) {
+    doIt();
+  } else {
+    snapshotTimer = setTimeout(doIt, 400);
+  }
+}
+
+function undo() {
+  // 先把待记录的改动落地
+  if (snapshotTimer) { clearTimeout(snapshotTimer); snapshotTimer = null; takeSnapshot(true); }
+
+  if (!undoStack.length) { toast('没有可撤销的操作'); return; }
+
+  const prev = undoStack.pop();
+  redoStack.push(lastSnapshot);
+  lastSnapshot = prev;
+  applySnapshot(prev);
+  toast(`已撤销（还可撤销 ${undoStack.length} 步）`);
+}
+
+function redo() {
+  if (!redoStack.length) { toast('没有可重做的操作'); return; }
+
+  const next = redoStack.pop();
+  undoStack.push(lastSnapshot);
+  lastSnapshot = next;
+  applySnapshot(next);
+  toast(`已重做（还可重做 ${redoStack.length} 步）`);
+}
+
+function applySnapshot(snap) {
+  isRestoring = true;
+  try {
+    const o = JSON.parse(snap);
+    state = Object.assign(state, o);
+
+    if (!Array.isArray(state.customCols)) state.customCols = [];
+    if (!Array.isArray(state.textOrder) || !state.textOrder.length) state.textOrder = ['name', 'actor'];
+    state.rows.forEach(r => {
+      if (!r.id) r.id = uid();
+      if (!Array.isArray(r.scores)) r.scores = [];
+    });
+
+    // 重算 customColSeq
+    let maxSeq = 0;
+    state.customCols.forEach(c => {
+      const m = /^custom_(\d+)$/.exec(c.key || '');
+      if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+    });
+    customColSeq = maxSeq + 1;
+
+    syncAllUI();
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  } catch (e) {
+    toast('恢复失败：' + e.message);
+  } finally {
+    isRestoring = false;
+    updateUndoButtons();
+  }
+}
+
+/* 把所有界面控件同步成 state 的样子 */
+function syncAllUI() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const chk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+
+  set('aw1', state.awards.first || 0);
+  set('aw2', state.awards.second || 0);
+  set('aw3', state.awards.third || 0);
+  chk('chkDropHighLow', state.dropHighLow);
+  chk('chkHasUnit', state.hasUnit);
+  chk('chkHideScores', state.hideScores);
+  chk('chkShowAdjust', state.showAdjust);
+  chk('chkDrawOrder', state.drawOrder);
+  document.body.classList.toggle('hide-scores', !!state.hideScores);
+
+  const hlRow = document.querySelector('.highlight-row');
+  if (hlRow) hlRow.classList.toggle('active', !!state.drawOrder);
+
+  updateRuleButtons();
+  syncExportColsUI();
+  renderCustomColList();
+  renderTitle();
+  renderHead();
+  renderBody();
+}
+
+function updateUndoButtons() {
+  const u = document.getElementById('btnUndo');
+  const r = document.getElementById('btnRedo');
+  if (u) {
+    u.disabled = undoStack.length === 0;
+    u.title = undoStack.length ? `撤销（还可撤销 ${undoStack.length} 步）  Ctrl+Z` : '没有可撤销的操作';
+  }
+  if (r) {
+    r.disabled = redoStack.length === 0;
+    r.title = redoStack.length ? `重做（还可重做 ${redoStack.length} 步）  Ctrl+Y` : '没有可重做的操作';
+  }
 }
 
 function load() {
@@ -579,12 +750,88 @@ function load() {
       state.textOrder.push('unit');
     }
     if (!state.hasUnit) state.textOrder = state.textOrder.filter(k => k !== 'unit');
+
+    // 恢复自定义列
+    if (!Array.isArray(state.customCols)) state.customCols = [];
+    // 修正 customColSeq，避免重复 key
+    let maxSeq = 0;
+    state.customCols.forEach(c => {
+      const m = /^custom_(\d+)$/.exec(c.key || '');
+      if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+    });
+    customColSeq = maxSeq + 1;
+    // 确保自定义列都在 textOrder 里
+    state.customCols.forEach(c => {
+      if (!state.textOrder.includes(c.key)) state.textOrder.push(c.key);
+    });
+
     state.rows.forEach(r => {
       if (!r.id) r.id = uid();
       if (!Array.isArray(r.scores)) r.scores = [];
     });
+
+    // ★ 旧版数据自动迁移：老版本输入纯数字（如 95500）会自动换算成 95.500
+    //   新版不换算，所以要把这些"原始数字"还原成真实分数
+    migrateLegacyScores();
+
     return true;
   } catch (e) { return false; }
+}
+
+/* ============================================================
+   旧版数据迁移
+   旧版规则：用户敲 95500，页面显示 95.500（按小数位自动插小数点）
+             但 localStorage 里存的是原始串 "95500"
+   新版规则：不自动换算，所以 "95500" 会被当成 95500 参与计算 → 平均分放大
+   
+   迁移策略：
+   - 遍历所有分数
+   - 如果某个分数 > 满分，且数值 = 原值 / 10^小数位 后落在合理范围，
+     说明它是旧版原始数字，除以 10^小数位 还原
+   - 只迁移「明显超出满分」的值，不动正常范围内的数据
+   ============================================================ */
+function migrateLegacyScores() {
+  const max = state.maxScore || 100;
+  const dec = state.decimals || 2;
+  const div = Math.pow(10, dec);
+  if (div <= 1) return;   // 整数模式不需要迁移
+
+  let migrated = 0;
+  let checked = 0;
+
+  state.rows.forEach(r => {
+    if (!Array.isArray(r.scores)) return;
+    r.scores = r.scores.map(v => {
+      if (v === undefined || v === null || String(v).trim() === '') return v;
+      checked++;
+
+      const num = parseFloat(String(v).replace(/[^\d.\-]/g, ''));
+      if (isNaN(num)) return v;
+
+      // 在合理范围内 → 不动
+      if (num >= 0 && num <= max) return v;
+
+      // 超出满分 → 尝试还原
+      const restored = num / div;
+      if (restored >= 0 && restored <= max * 1.0001) {
+        migrated++;
+        // 保留合理精度（去掉浮点误差）
+        return String(parseFloat(restored.toFixed(dec)));
+      }
+
+      // 还原后依然超限 → 保持原值（让用户自己看到问题）
+      return v;
+    });
+  });
+
+  if (migrated > 0) {
+    save();
+    // 延迟提示（等界面渲染完）
+    setTimeout(() => {
+      toast(`已自动还原 ${migrated} 个旧版分数（原数字 ÷ ${div}）`);
+    }, 800);
+    console.log(`[迁移] 检查 ${checked} 个分数，还原 ${migrated} 个（÷${div}）`);
+  }
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -715,9 +962,9 @@ function renderHead() {
   // 序号（固定列，不参与列切换，不能删除）
   html += `<th class="fixed-col" style="width:56px"><div class="th-inner">序号</div></th>`;
 
-  // 文本列（整格可点击切换）
+  // 文本列（整格可点击切换，含自定义列）
   state.textOrder.forEach((key, pos) => {
-    const label = TEXT_COLS[key] ? TEXT_COLS[key].label : key;
+    const label = colLabel(key);
     html += `<th class="switchable" style="min-width:${key === 'name' ? 190 : 140}px"
       data-textpos="${pos}" onclick="openColMenu(event, ${pos})"
       title="点击整格可切换这一列的内容">
@@ -800,9 +1047,15 @@ function renderBody() {
       inp.dataset.row = ri;
       inp.dataset.col = i;
 
-      // 直接显示存的原值（不做格式化）
+      // 直接显示存的原值
       const cur = row.scores[i];
-      inp.value = (cur === undefined || cur === null) ? '' : String(cur);
+      // 迁移过来的值按小数位格式化显示（如 95.5 → 95.500）
+      let initShow = '';
+      if (cur !== undefined && cur !== null && String(cur).trim() !== '') {
+        const n = parseFloat(String(cur));
+        initShow = isNaN(n) ? String(cur) : n.toFixed(state.decimals);
+      }
+      inp.value = initShow;
       inp.placeholder = '';
       inp.tabIndex = -1;   // 用自定义方向键导航，不参与 Tab
       inp.title = `满分 ${state.maxScore}`;
@@ -851,18 +1104,23 @@ function renderBody() {
         }
 
         inp.classList.remove('invalid');
-        row.scores[i] = cleaned;
+        // 存数值字符串（去掉多余的 0）
+        row.scores[i] = String(v);
         save();
         refreshStats();
       };
 
       // 直接监听 input，简单可靠
       inp.addEventListener('input', commit);
+      // 失焦：按小数位格式化显示（仅显示，不改存储值）
       inp.addEventListener('blur', () => {
-        // 失焦：保持用户输入的原始值，不做格式化
-        // （小数位只影响平均分/最终成绩，不影响评委打分的显示）
         const cur2 = row.scores[i];
-        inp.value = (cur2 === undefined || cur2 === null) ? '' : String(cur2);
+        if (cur2 === undefined || cur2 === null || String(cur2).trim() === '') {
+          inp.value = '';
+          return;
+        }
+        const n = parseFloat(String(cur2));
+        inp.value = isNaN(n) ? String(cur2) : n.toFixed(state.decimals);
       });
       // 聚焦时全选，方便直接覆盖
       inp.addEventListener('focus', () => {
@@ -1675,14 +1933,20 @@ function openColMenu(ev, pos) {
   const menu = document.getElementById('colMenu');
   const cur = state.textOrder[pos];
 
+  // 可选列：内置 + 自定义
   const options = ['name', 'actor'];
   if (state.hasUnit) options.push('unit');
+  (state.customCols || []).forEach(c => {
+    if (!options.includes(c.key)) options.push(c.key);
+  });
 
   let html = '';
   options.forEach(key => {
     const used = state.textOrder.includes(key) && state.textOrder[pos] !== key;
+    const label = colLabel(key);
+    const isCustom = key.startsWith('custom_');
     html += `<div class="item ${cur === key ? 'sel' : ''}" onclick="switchCol(${pos}, '${key}')">
-      <span class="dot"></span>${TEXT_COLS[key].label}${used ? '（已在其他列）' : ''}
+      <span class="dot"></span>${esc(label)}${used ? '（已在其他列）' : ''}${isCustom ? ' 🏷' : ''}
     </div>`;
   });
   menu.innerHTML = html;
@@ -1793,6 +2057,69 @@ function onShowAdjustChange() {
    - 勾选时：确认后清空所有行的序号（供现场手填抽签号）
    - 取消时：确认后按当前顺序重新编号
    - 导入时：勾选状态下不自动填序号 */
+/* ============================================================
+   自定义列：增加 / 删除
+   ============================================================ */
+let customColSeq = 1;
+
+function addCustomCol() {
+  const inp = document.getElementById('customColInput');
+  const label = (inp.value || '').trim();
+  if (!label) { toast('先输入列名，比如「编导」'); inp.focus(); return; }
+
+  // 重名校验
+  const exists = state.textOrder.some(k => colLabel(k) === label);
+  if (exists) { toast(`已有「${label}」这一列了`); return; }
+
+  if ((state.customCols || []).length >= 6) {
+    toast('自定义列最多 6 个');
+    return;
+  }
+
+  // 生成唯一 key
+  let key;
+  do {
+    key = 'custom_' + (customColSeq++);
+  } while (state.textOrder.includes(key) || (state.customCols || []).some(c => c.key === key));
+
+  state.customCols = state.customCols || [];
+  state.customCols.push({ key, label });
+  state.textOrder.push(key);
+
+  save();
+  inp.value = '';
+  renderCustomColList();
+  renderHead();
+  renderBody();
+  toast(`已增加「${label}」列`);
+}
+
+function removeCustomCol(key) {
+  const c = (state.customCols || []).find(x => x.key === key);
+  if (!c) return;
+  if (!confirm(`删除「${c.label}」这一列？\n该列已填的内容会一起清除。`)) return;
+
+  state.customCols = state.customCols.filter(x => x.key !== key);
+  state.textOrder = state.textOrder.filter(k => k !== key);
+  state.rows.forEach(r => { delete r[key]; });
+
+  save();
+  renderCustomColList();
+  renderHead();
+  renderBody();
+  toast(`已删除「${c.label}」列`);
+}
+
+function renderCustomColList() {
+  const box = document.getElementById('customColList');
+  if (!box) return;
+  const cols = state.customCols || [];
+  if (!cols.length) { box.innerHTML = ''; return; }
+  box.innerHTML = cols.map(c =>
+    `<span class="custom-col-tag">${esc(c.label)}<span class="x" onclick="removeCustomCol('${c.key}')" title="删除这一列">×</span></span>`
+  ).join('');
+}
+
 function onDrawOrderChange() {
   const box = document.getElementById('chkDrawOrder');
   const want = box.checked;
@@ -2132,15 +2459,23 @@ function exportSetup() {
       dropHighLow: state.dropHighLow,
       drawOrder: state.drawOrder,
       awards: { ...state.awards },
-      textOrder: [...state.textOrder]
+      textOrder: [...state.textOrder],
+      customCols: (state.customCols || []).map(c => ({ key: c.key, label: c.label }))
     },
-    rows: rows.map(r => ({
-      no: r.no === undefined || r.no === null ? '' : r.no,
-      name: r.name || '',
-      actor: r.actor || '',
-      unit: r.unit || '',
-      scores: (r.scores || []).map(s => (s === undefined || s === null ? '' : String(s)))
-    }))
+    rows: rows.map(r => {
+      const o = {
+        no: r.no === undefined || r.no === null ? '' : r.no,
+        name: r.name || '',
+        actor: r.actor || '',
+        unit: r.unit || '',
+        scores: (r.scores || []).map(s => (s === undefined || s === null ? '' : String(s)))
+      };
+      // 自定义列的值
+      (state.customCols || []).forEach(c => {
+        o[c.key] = r[c.key] === undefined || r[c.key] === null ? '' : String(r[c.key]);
+      });
+      return o;
+    })
   };
 
   const json = JSON.stringify(pack, null, 2);
@@ -2236,13 +2571,28 @@ function applySetup(pack) {
     third:  Math.max(0, Math.min(99, parseInt(aw.third, 10)  || 0))
   };
 
-  // 文本列顺序
-  let order = Array.isArray(s.textOrder) ? s.textOrder.filter(k => ['name','actor','unit'].includes(k)) : [];
+  // 恢复自定义列（必须在 textOrder 之前）
+  state.customCols = Array.isArray(s.customCols)
+    ? s.customCols.filter(c => c && c.key && c.label).map(c => ({ key: c.key, label: c.label }))
+    : [];
+  // 修正序号
+  let maxSeq2 = 0;
+  state.customCols.forEach(c => {
+    const m = /^custom_(\d+)$/.exec(c.key || '');
+    if (m) maxSeq2 = Math.max(maxSeq2, parseInt(m[1], 10));
+  });
+  customColSeq = maxSeq2 + 1;
+
+  // 文本列顺序（含自定义列）
+  const validKeys = ['name','actor','unit', ...state.customCols.map(c => c.key)];
+  let order = Array.isArray(s.textOrder) ? s.textOrder.filter(k => validKeys.includes(k)) : [];
   if (!order.length) order = ['name', 'actor'];
   if (state.hasUnit && !order.includes('unit')) order.push('unit');
   if (!state.hasUnit) order = order.filter(k => k !== 'unit');
   // 保证 name 和 actor 都在
   ['name', 'actor'].forEach(k => { if (!order.includes(k)) order.push(k); });
+  // 自定义列都要在
+  state.customCols.forEach(c => { if (!order.includes(c.key)) order.push(c.key); });
   state.textOrder = order;
 
   // 2. 标题
@@ -2254,14 +2604,20 @@ function applySetup(pack) {
     const scores = Array.isArray(r.scores) ? r.scores.slice(0, state.judgeCount) : [];
     // 补齐到评委数量
     while (scores.length < state.judgeCount) scores.push('');
-    state.rows.push({
+    const rowObj = {
       id: uid(),
       no: (r.no === undefined || r.no === null) ? '' : r.no,
       name: r.name || '',
       actor: r.actor || '',
       unit: r.unit || '',
       scores: scores.map(x => (x === undefined || x === null) ? '' : String(x))
+    };
+    // 恢复自定义列的值
+    (state.customCols || []).forEach(c => {
+      const v = r[c.key];
+      rowObj[c.key] = (v === undefined || v === null) ? '' : String(v);
     });
+    state.rows.push(rowObj);
   });
 
   // 4. 不足 20 行时补齐空行
@@ -2541,16 +2897,50 @@ function onExportColsChange() {
 }
 
 function syncExportColsUI() {
+  // 先重建自定义列的勾选项
+  rebuildCustomExportCols();
+
   document.querySelectorAll('.exp-col').forEach(b => {
     const k = b.dataset.col;
-    b.checked = state.exportCols && state.exportCols[k] !== undefined
-      ? !!state.exportCols[k]
-      : (k === 'no' || k === 'name' || k === 'actor' || k === 'avg' || k === 'adjust' || k === 'final' || k === 'rank');
+    if (state.exportCols && state.exportCols[k] !== undefined) {
+      b.checked = !!state.exportCols[k];
+    } else if (k.startsWith('custom_')) {
+      b.checked = true;   // 自定义列默认勾选
+    } else {
+      b.checked = (k === 'no' || k === 'name' || k === 'actor' || k === 'avg' || k === 'adjust' || k === 'final' || k === 'rank');
+    }
   });
 
   // 「分数修正 / 最终成绩」只在开启分数修正时才有意义
   document.querySelectorAll('.exp-adjust-only').forEach(el => {
     el.style.display = state.showAdjust ? '' : 'none';
+  });
+}
+
+/* 导出勾选区里，为自定义列动态插入勾选项 */
+function rebuildCustomExportCols() {
+  const box = document.getElementById('exportCols');
+  if (!box) return;
+
+  // 先移除旧的自定义项
+  box.querySelectorAll('.exp-custom').forEach(el => el.remove());
+
+  // 在「名次」后面插入
+  const rankLabel = [...box.querySelectorAll('label.exp-col-wrap')].find(el => {
+    const cb = el.querySelector('.exp-col');
+    return cb && cb.dataset.col === 'rank';
+  });
+  const anchor = rankLabel || box.lastElementChild;
+
+  (state.customCols || []).forEach(c => {
+    const el = document.createElement('label');
+    el.className = 'chk exp-custom';
+    el.innerHTML = `<input type="checkbox" class="exp-col" data-col="${c.key}" onchange="onExportColsChange()"> ${esc(c.label)}`;
+    if (anchor && anchor.parentNode === box) {
+      anchor.after(el);
+    } else {
+      box.appendChild(el);
+    }
   });
 }
 
@@ -2563,7 +2953,7 @@ function buildExportColumns() {
     if (ec[k]) {
       cols.push({
         key: k,
-        label: TEXT_COLS[k] ? TEXT_COLS[k].label : k,
+        label: colLabel(k),
         width: k === 'name' ? 210 : 150
       });
     }
@@ -3024,6 +3414,21 @@ document.addEventListener('scroll', () => { hideCtxMenu(); hideCellMenu(); }, tr
 window.addEventListener('resize', () => { hideCtxMenu(); hideCellMenu(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { hideCtxMenu(); hideCellMenu(); }
+
+  // 撤销 / 重做
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+    // 如果焦点在输入框且有文本选中/可撤销，优先让浏览器处理输入框内的撤销？
+    // 这里统一走全局撤销，避免两套逻辑打架
+    e.preventDefault();
+    undo();
+    return;
+  }
+  if (ctrl && ((e.shiftKey && (e.key === 'z' || e.key === 'Z')) || e.key === 'y' || e.key === 'Y')) {
+    e.preventDefault();
+    redo();
+    return;
+  }
 });
 
 /* ---------------- 活动标题 ---------------- */
@@ -3135,6 +3540,14 @@ function esc(s) {
 
   // 初始化吸顶
   setupStickyHeader();
+
+  // 初始化撤销基线（记录打开时的状态作为第 0 步）
+  // 注意：要清掉初始化过程中产生的待执行快照，否则一打开就能撤销
+  if (snapshotTimer) { clearTimeout(snapshotTimer); snapshotTimer = null; }
+  lastSnapshot = JSON.stringify(state);
+  undoStack = [];
+  redoStack = [];
+  updateUndoButtons();
 })();
 
 /* ============================================================
