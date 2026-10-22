@@ -176,9 +176,13 @@ def main():
             dl.value.save_as(tmp)
             html = open(tmp, encoding='utf-8-sig').read()
             heads = re.findall(r'<th>([^<]+)</th>', html)
-            ck("按勾选导出列数", len(heads) == 4, str(heads))
+            # 勾选「平均分」时，若开启了分数修正，会自动带出「分数修正」「最终成绩」两列
+            expect_cols = 4 + (2 if pg.evaluate("() => state.showAdjust") else 0)
+            ck("按勾选导出列数", len(heads) == expect_cols, f"{len(heads)} 列: {heads}")
             ck("含序号/节目名称/平均分/名次",
                all(h in heads for h in ['序号','节目名称','平均分','名次']), str(heads))
+            if pg.evaluate("() => state.showAdjust"):
+                ck("含分数修正/最终成绩", '分数修正' in heads and '最终成绩' in heads, str(heads))
         except Exception as e:
             ck("导出 Excel", False, str(e)[:60])
 
@@ -302,4 +306,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 

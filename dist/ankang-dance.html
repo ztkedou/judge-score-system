@@ -35,6 +35,22 @@
     min-width: 120px; transition: background .15s;
   }
   .title-text:hover { background: #f5f6f8; }
+
+  /* 可直接编辑的标题输入框 */
+  .title-edit {
+    font-size: 22px; font-weight: 700; color: #1f2329;
+    letter-spacing: 2px; text-align: center; font-family: inherit;
+    border: 1px solid transparent; outline: none; background: transparent;
+    padding: 5px 12px; border-radius: 6px;
+    width: 70%; min-width: 240px; max-width: 720px;
+    transition: all .15s;
+  }
+  .title-edit:hover { background: #f5f6f8; border-color: #e5e6eb; }
+  .title-edit:focus {
+    background: #fff; border-color: #3370ff;
+    box-shadow: 0 0 0 3px rgba(51,112,255,.12);
+  }
+  .title-edit::placeholder { color: #c0c4cc; font-weight: 400; font-size: 18px; letter-spacing: 1px; }
   .title-input {
     font-size: 22px; font-weight: 700; color: #1f2329;
     letter-spacing: 2px; text-align: center; font-family: inherit;
@@ -191,6 +207,14 @@
     min-width: 66px;
   }
   td.rank { font-weight: 600; min-width: 62px; }
+
+  /* 分数修正 / 最终成绩 */
+  td.adjust { background: #fffbf0; }
+  td.adjust input { color: #b8791a; font-weight: 600; }
+  td.final {
+    font-weight: 700; font-size: 15px; background: #f7f9ff;
+    font-variant-numeric: tabular-nums; min-width: 80px;
+  }
   .rank-tag {
     display: inline-block; padding: 2px 7px; border-radius: 4px;
     font-size: 12px; font-weight: 600; line-height: 1.5;
@@ -366,13 +390,16 @@
       <label class="chk"><input type="checkbox" id="chkDropHighLow" onchange="onRuleChange()"> 去掉一个最高分和一个最低分</label>
       <label class="chk"><input type="checkbox" id="chkHasUnit" onchange="onHasUnitChange()"> 有选送单位</label>
       <label class="chk"><input type="checkbox" id="chkHideScores" onchange="onHideScoresChange()"> 隐藏评委打分</label>
+      <label class="chk"><input type="checkbox" id="chkShowAdjust" onchange="onShowAdjustChange()"> 分数修正 / 最终成绩</label>
     </div>
   </div>
 
   <!-- ================= 第三栏：打分表格 ================= -->
   <!-- 活动标题栏（在表格正上方，属于表格区域） -->
   <div class="titlebar" id="titleBar">
-    <div class="title-text" id="titleText" onclick="focusTitleInput()" title="点击修改活动题目">评分表</div>
+    <input type="text" class="title-edit" id="titleText" value="评分表"
+           placeholder="点击这里输入活动题目"
+           oninput="onTitleEdit()" onblur="onTitleBlur()">
   </div>
 
   <div class="tablewrap" id="tableWrap">
@@ -497,6 +524,7 @@ let state = {
   hideScores: false,     // 隐藏评委打分
   dropHighLow: false,    // 去掉最高最低
   drawOrder: false,      // 现场抽签顺序（导入不自动填序号）
+  showAdjust: true,      // 显示「分数修正 / 最终成绩」两列（安康节拍版默认开）
   awards: { first: 0, second: 0, third: 0 },
   textOrder: ['name', 'actor', 'unit'],   // 节目名称 / 表演团队 / 选送单位
   title: '',             // 活动题目（空则用默认标题）
@@ -628,28 +656,39 @@ function calcRow(row) {
   const sum = useVals.reduce((a, b) => a + b, 0);
   const avg = sum / useVals.length;
 
-  return { avg, sum, count: useVals.length, highest, lowest, dropped };
+  // 分数修正（加减分），默认 0
+  const adj = parseFloat(row.adjust);
+  const adjust = isNaN(adj) ? 0 : adj;
+
+  // 最终成绩 = 平均分 + 分数修正
+  const final = (avg === null) ? null : (avg + adjust);
+
+  return { avg, sum, count: useVals.length, highest, lowest, dropped, adjust, final };
 }
 
 /* ---------------- 计算所有行排名 ---------------- */
 function computeRanks() {
+  // 勾选「分数修正」时按最终成绩排名，否则按平均分排名
+  const useFinal = !!state.showAdjust;
+
   const list = state.rows.map(r => {
     const st = calcRow(r);
-    return { id: r.id, avg: st.avg };
-  }).filter(x => x.avg !== null);
+    const key = useFinal ? st.final : st.avg;
+    return { id: r.id, avg: st.avg, final: st.final, key: key };
+  }).filter(x => x.key !== null && x.key !== undefined);
 
-  // 按平均分从高到低
-  list.sort((a, b) => b.avg - a.avg);
+  // 从高到低
+  list.sort((a, b) => b.key - a.key);
 
   const rankMap = {};   // id -> 名次数字
-  let lastAvg = null, lastRank = 0;
+  let lastKey = null, lastRank = 0;
   list.forEach((x, i) => {
-    if (lastAvg !== null && Math.abs(x.avg - lastAvg) < 1e-9) {
+    if (lastKey !== null && Math.abs(x.key - lastKey) < 1e-9) {
       rankMap[x.id] = lastRank;
     } else {
       rankMap[x.id] = i + 1;
       lastRank = i + 1;
-      lastAvg = x.avg;
+      lastKey = x.key;
     }
   });
   return { rankMap, sorted: list };
@@ -680,8 +719,16 @@ function renderHead() {
     html += `<th class="score-col" style="width:74px"><div class="th-inner">评委${i + 1}</div></th>`;
   }
 
-  // 平均分、名次
+  // 平均分
   html += `<th style="width:80px"><div class="th-inner">平均分</div></th>`;
+
+  // 分数修正 / 最终成绩（勾选时才显示）
+  if (state.showAdjust) {
+    html += `<th style="width:82px" class="adjust-col"><div class="th-inner">分数修正</div></th>`;
+    html += `<th style="width:88px" class="final-col"><div class="th-inner">最终成绩</div></th>`;
+  }
+
+  // 名次
   html += `<th style="width:74px"><div class="th-inner">名次</div></th>`;
 
   tr.innerHTML = html;
@@ -762,6 +809,39 @@ function renderBody() {
     const tdAvg = document.createElement('td');
     tdAvg.className = 'avg';
     tr.appendChild(tdAvg);
+
+    // 分数修正 / 最终成绩（勾选时才显示）
+    if (state.showAdjust) {
+      // 分数修正：可输入，支持正负
+      const tdAdjust = document.createElement('td');
+      tdAdjust.className = 'adjust';
+      const inpAdj = document.createElement('input');
+      inpAdj.type = 'text';
+      inpAdj.inputMode = 'decimal';
+      inpAdj.className = 'cell';
+      inpAdj.value = (row.adjust === undefined || row.adjust === null) ? '' : row.adjust;
+      inpAdj.placeholder = '0';
+      inpAdj.tabIndex = 60 + ri * 100 + 90;
+      inpAdj.title = '加分填正数，扣分填负数（如 +0.5 / -0.3）';
+      inpAdj.oninput = () => {
+        row.adjust = inpAdj.value;
+        save();
+        refreshStats();
+      };
+      inpAdj.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          moveFocus(inpAdj, e.shiftKey ? -1 : 1);
+        }
+      };
+      tdAdjust.appendChild(inpAdj);
+      tr.appendChild(tdAdjust);
+
+      // 最终成绩（只读显示）
+      const tdFinal = document.createElement('td');
+      tdFinal.className = 'final';
+      tr.appendChild(tdFinal);
+    }
 
     // 名次
     const tdRank = document.createElement('td');
@@ -874,6 +954,21 @@ function refreshStats() {
       } else {
         tdAvg.textContent = fmtScore(st.avg, state.decimals);
         tdAvg.style.color = '#3370ff';
+      }
+    }
+
+    // 最终成绩（勾选分数修正时才存在）
+    if (state.showAdjust) {
+      const tdFinal = tr.querySelector('td.final');
+      if (tdFinal) {
+        if (st.final === null) {
+          tdFinal.textContent = '—';
+          tdFinal.style.color = '#c0c4cc';
+        } else {
+          tdFinal.textContent = fmtScore(st.final, state.decimals);
+          // 有修正时用不同颜色提示
+          tdFinal.style.color = (st.adjust !== 0) ? '#f54a45' : '#1f2329';
+        }
       }
     }
 
@@ -1313,6 +1408,17 @@ function onHideScoresChange() {
   state.hideScores = document.getElementById('chkHideScores').checked;
   document.body.classList.toggle('hide-scores', state.hideScores);
   save();
+}
+
+/* 分数修正 / 最终成绩：勾选后表格多两列 */
+function onShowAdjustChange() {
+  state.showAdjust = document.getElementById('chkShowAdjust').checked;
+  save();
+  renderHead();
+  renderBody();
+  toast(state.showAdjust
+    ? '已显示「分数修正 / 最终成绩」两列，排名改为按最终成绩'
+    : '已隐藏修正列，排名按平均分');
 }
 
 /* 现场抽签顺序：
@@ -1860,6 +1966,7 @@ function resetSettings() {
   state.hideScores = false;
   state.dropHighLow = false;
   state.drawOrder = false;
+  state.showAdjust = true;      // 安康节拍版默认开启
   state.awards = { first: 0, second: 0, third: 0 };
   state.title = '';
   state.exportCols = {
@@ -1992,6 +2099,14 @@ function applyPrintCols() {
   const table = document.getElementById('mainTable');
   if (!table) return;
 
+  const scoreStart = 1 + state.textOrder.length;
+  const scoreEnd = scoreStart + state.judgeCount;
+  // 列索引：平均分 = scoreEnd，分数修正 = +1，最终成绩 = +2，名次 = 最后
+  const avgIdx = scoreEnd;
+  const adjIdx = scoreEnd + 1;
+  const finalIdx = scoreEnd + 2;
+  const rankIdx = state.showAdjust ? scoreEnd + 3 : scoreEnd + 1;
+
   const ths = table.querySelectorAll('#theadRow th');
   ths.forEach((th, idx) => {
     let show = true;
@@ -2000,16 +2115,16 @@ function applyPrintCols() {
     } else if (idx >= 1 && idx <= state.textOrder.length) {
       const k = state.textOrder[idx - 1];
       show = !!ec[k];
-    } else {
-      const scoreStart = 1 + state.textOrder.length;
-      const scoreEnd = scoreStart + state.judgeCount;
-      if (idx >= scoreStart && idx < scoreEnd) {
-        show = !!ec.scores;
-      } else if (idx === scoreEnd) {
-        show = !!ec.avg;
-      } else if (idx === scoreEnd + 1) {
-        show = !!ec.rank;
-      }
+    } else if (idx >= scoreStart && idx < scoreEnd) {
+      show = !!ec.scores;
+    } else if (idx === avgIdx) {
+      show = !!ec.avg;
+    } else if (idx === adjIdx && state.showAdjust) {
+      show = !!ec.avg;      // 跟着平均分一起显示/隐藏
+    } else if (idx === finalIdx && state.showAdjust) {
+      show = !!ec.avg;
+    } else if (idx === rankIdx) {
+      show = !!ec.rank;
     }
     th.classList.toggle('print-hide', !show);
 
@@ -2018,6 +2133,19 @@ function applyPrintCols() {
       const td = tr.children[idx];
       if (td) td.classList.toggle('print-hide', !show);
     });
+  });
+
+  // 打印时隐藏空行
+  table.querySelectorAll('#tbody tr').forEach((tr, i) => {
+    const row = state.rows[i];
+    if (!row) return;
+    const used =
+      (row.name || '').trim() ||
+      (row.actor || '').trim() ||
+      (row.unit || '').trim() ||
+      (row.scores || []).some(s => String(s === undefined || s === null ? '' : s).trim() !== '') ||
+      String(row.adjust === undefined || row.adjust === null ? '' : row.adjust).trim() !== '';
+    tr.classList.toggle('print-hide', !used);
   });
 }
 
@@ -2070,9 +2198,27 @@ function buildExportColumns() {
       cols.push({ key: 'score' + i, label: '评委' + (i + 1), width: 74, scoreIdx: i });
     }
   }
-  if (ec.avg) cols.push({ key: 'avg', label: '平均分', width: 88 });
+  // 勾选了「分数修正」时：平均分 → 分数修正 → 最终成绩
+  if (ec.avg) {
+    cols.push({ key: 'avg', label: '平均分', width: 88 });
+    if (state.showAdjust) {
+      cols.push({ key: 'adjust', label: '分数修正', width: 82 });
+      cols.push({ key: 'final', label: '最终成绩', width: 88 });
+    }
+  }
   if (ec.rank) cols.push({ key: 'rank', label: '名次', width: 82 });
   return cols;
+}
+
+// 导出/打印时只取「有内容」的行（去掉没用的空行）
+function getUsedRows() {
+  return state.rows.filter(r =>
+    (r.name || '').trim() ||
+    (r.actor || '').trim() ||
+    (r.unit || '').trim() ||
+    (r.scores || []).some(s => String(s === undefined || s === null ? '' : s).trim() !== '') ||
+    String(r.adjust === undefined || r.adjust === null ? '' : r.adjust).trim() !== ''
+  );
 }
 
 /* ---------------- 导出 Excel ----------------
@@ -2084,6 +2230,10 @@ function exportExcel() {
 
   const cols = buildExportColumns();
   if (!cols.length) { toast('没有勾选任何列'); return; }
+
+  // 只导出有内容的行，去掉没用的空行
+  const usedRows = getUsedRows();
+  if (!usedRows.length) { toast('表格里还没有节目'); return; }
 
   const { rankMap } = computeRanks();
   const awardMap = computeAwards(rankMap);
@@ -2099,6 +2249,8 @@ function exportExcel() {
     .hi { background: #ffe0e0; color: #c00; font-weight: bold; }
     .lo { background: #ddf0ff; color: #06c; font-weight: bold; }
     .avg { background: #f5f8ff; font-weight: bold; color: #3370ff; }
+    .adj { background: #fffbf0; color: #b8791a; font-weight: bold; }
+    .fin { background: #f7f9ff; font-weight: bold; }
     .title-row td { border: none; font-size: 16pt; font-weight: bold; padding: 10px 0; text-align: center; }
   </style></head><body><table>`;
 
@@ -2110,8 +2262,8 @@ function exportExcel() {
   cols.forEach(c => { html += `<th>${esc(c.label)}</th>`; });
   html += '</tr>';
 
-  // 数据行
-  state.rows.forEach((row, ri) => {
+  // 数据行（只含有内容的行）
+  usedRows.forEach((row, ri) => {
     const st = calcRow(row);
     const rk = rankMap[row.id];
     const award = awardMap[row.id];
@@ -2123,6 +2275,12 @@ function exportExcel() {
       } else if (c.key === 'avg') {
         const avgStr = st.avg === null ? '' : fmtScore(st.avg, state.decimals);
         html += `<td class="avg">${avgStr}</td>`;
+      } else if (c.key === 'adjust') {
+        const a = st.adjust || 0;
+        html += `<td class="adj">${a === 0 ? '' : (a > 0 ? '+' + a : String(a))}</td>`;
+      } else if (c.key === 'final') {
+        const fStr = st.final === null ? '' : fmtScore(st.final, state.decimals);
+        html += `<td class="fin">${fStr}</td>`;
       } else if (c.key === 'rank') {
         html += `<td>${award ? award : (rk || '')}</td>`;
       } else if (c.scoreIdx !== undefined) {
@@ -2143,7 +2301,7 @@ function exportExcel() {
 
   const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
   downloadBlob(blob, `评委打分_${stamp()}.xls`);
-  toast(`已导出 Excel（${cols.length} 列）`);
+  toast(`已导出 Excel（${usedRows.length} 行 · ${cols.length} 列）`);
 }
 
 /* ---------------- 导出图片（Canvas 手绘）---------------- */
@@ -2158,12 +2316,16 @@ function exportImage() {
   if (!exportCols.length) { toast('没有勾选任何列'); return; }
   const cols = exportCols.map(c => ({ title: c.label, width: c.width, meta: c }));
 
+  // 只画有内容的行，去掉空行
+  const usedRows = getUsedRows();
+  if (!usedRows.length) { toast('表格里还没有节目'); return; }
+
   const totalW = cols.reduce((a, c) => a + c.width, 0);
   const rowH = 38;
   const headH = 42;
   const padTop = 92;    // 上方留出活动标题的位置
   const padBottom = 30;
-  const tableH = headH + rowH * state.rows.length;
+  const tableH = headH + rowH * usedRows.length;
   const W = totalW + 40;
   const H = padTop + tableH + padBottom;
 
@@ -2215,9 +2377,9 @@ function exportImage() {
   });
   y += headH;
 
-  // 数据行
+  // 数据行（只画有内容的行）
   ctx.font = '13px "Microsoft YaHei", sans-serif';
-  state.rows.forEach((row, ri) => {
+  usedRows.forEach((row, ri) => {
     const st = calcRow(row);
     x = startX;
 
@@ -2248,6 +2410,23 @@ function exportImage() {
         ctx.fillStyle = '#3370ff';
         ctx.font = 'bold 15px "Microsoft YaHei", sans-serif';
         if (st.avg !== null) ctx.fillText(fmtScore(st.avg, state.decimals), x + col.width / 2, y + rowH / 2);
+
+      } else if (meta.key === 'adjust') {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fffbf0';
+        ctx.fillRect(x, y, col.width, rowH);
+        ctx.fillStyle = '#b8791a';
+        ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+        const a = st.adjust || 0;
+        if (a !== 0) ctx.fillText(a > 0 ? '+' + a : String(a), x + col.width / 2, y + rowH / 2);
+
+      } else if (meta.key === 'final') {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#f7f9ff';
+        ctx.fillRect(x, y, col.width, rowH);
+        ctx.fillStyle = (st.adjust !== 0) ? '#c92a2a' : '#1f2329';
+        ctx.font = 'bold 15px "Microsoft YaHei", sans-serif';
+        if (st.final !== null) ctx.fillText(fmtScore(st.final, state.decimals), x + col.width / 2, y + rowH / 2);
 
       } else if (meta.key === 'rank') {
         ctx.textAlign = 'center';
@@ -2471,33 +2650,55 @@ document.addEventListener('keydown', e => {
 const DEFAULT_TITLE = '第九届"安康节拍"群众广场舞大赛';
 
 function renderTitle() {
+  // 表格上方的标题输入框（可直接编辑）
   const el = document.getElementById('titleText');
-  if (el) el.textContent = state.title || DEFAULT_TITLE;
-  const inp = document.getElementById('titleInput');
-  if (inp) inp.value = state.title || '';
-}
+  if (el) el.value = state.title || DEFAULT_TITLE;
 
-function focusTitleInput() {
+  // 下方的「活动题目」输入框（只负责粘贴/输入，双向同步）
   const inp = document.getElementById('titleInput');
-  if (inp) {
-    inp.focus();
-    inp.select();
-    inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (inp && document.activeElement !== inp) {
+    inp.value = state.title || '';
   }
 }
 
+/* 表格上方的标题：直接输入 */
+function onTitleEdit() {
+  const el = document.getElementById('titleText');
+  state.title = el.value;
+  save();
+  // 同步到下方输入框
+  const inp = document.getElementById('titleInput');
+  if (inp) inp.value = state.title;
+}
+
+function onTitleBlur() {
+  const el = document.getElementById('titleText');
+  // 清空时回退到默认标题
+  if (!el.value.trim()) {
+    el.value = DEFAULT_TITLE;
+    state.title = '';
+    save();
+    const inp = document.getElementById('titleInput');
+    if (inp) inp.value = '';
+  }
+}
+
+/* 下方输入框改动 → 同步到上方标题 */
 function onTitleInput() {
   const v = document.getElementById('titleInput').value;
   state.title = v;
   save();
-  renderTitle();
+  const el = document.getElementById('titleText');
+  if (el) el.value = v || DEFAULT_TITLE;
 }
 
 function resetTitle() {
   state.title = '';
-  document.getElementById('titleInput').value = '';
+  const el = document.getElementById('titleText');
+  if (el) el.value = DEFAULT_TITLE;
+  const inp = document.getElementById('titleInput');
+  if (inp) inp.value = '';
   save();
-  renderTitle();
   toast('已恢复默认标题');
 }
 
@@ -2522,6 +2723,9 @@ function esc(s) {
   document.getElementById('chkHasUnit').checked = !!state.hasUnit;
   document.getElementById('chkHideScores').checked = !!state.hideScores;
   document.body.classList.toggle('hide-scores', !!state.hideScores);
+
+  // 恢复「分数修正 / 最终成绩」勾选状态
+  document.getElementById('chkShowAdjust').checked = !!state.showAdjust;
 
   // 恢复抽签顺序勾选状态
   document.getElementById('chkDrawOrder').checked = !!state.drawOrder;
