@@ -130,6 +130,43 @@
   }
   .custom-col-tag .x:hover { color: #f54a45; }
 
+  /* ============ 快捷键说明面板 ============ */
+  .shortcut-panel {
+    position: fixed; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(.96);
+    width: min(760px, 92vw); max-height: 82vh; overflow: auto;
+    background: #fff; border-radius: 10px; z-index: 10000;
+    box-shadow: 0 12px 48px rgba(0,0,0,.28);
+    display: none; opacity: 0; transition: opacity .18s, transform .18s;
+  }
+  .shortcut-panel.show {
+    display: block; opacity: 1; transform: translate(-50%, -50%) scale(1);
+  }
+  .sc-head {
+    position: sticky; top: 0; background: #1f2329; color: #fff;
+    padding: 12px 16px; font-size: 15px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center;
+    border-radius: 10px 10px 0 0;
+  }
+  .sc-close { cursor: pointer; font-size: 22px; line-height: 1; opacity: .7; }
+  .sc-close:hover { opacity: 1; }
+  .sc-body { padding: 14px 16px 18px; }
+  .sc-group { margin-bottom: 16px; }
+  .sc-gtitle {
+    font-size: 12px; color: #8f959e; font-weight: 600;
+    margin-bottom: 7px; letter-spacing: .5px;
+  }
+  .sc-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 5px 0; font-size: 13px; color: #1f2329;
+  }
+  .sc-row kbd {
+    flex: 0 0 168px; text-align: center;
+    background: #f5f6f8; border: 1px solid #dee0e3; border-bottom-width: 2px;
+    border-radius: 5px; padding: 3px 8px; font-family: inherit;
+    font-size: 12px; color: #1f2329; white-space: nowrap;
+  }
+
   /* 现场抽签顺序：高亮行 */
   .highlight-row {
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -372,20 +409,22 @@
   <!-- ================= 第一栏：功能区 ================= -->
   <div class="panel">
     <div class="btnrow">
-      <button onclick="addRow()">＋ 增加一行</button>
-      <button onclick="delRow()">－ 减少一行</button>
+      <button onclick="addRow()" title="增加一行（Ctrl+D / Alt+I）">＋ 增加一行</button>
+      <button onclick="delRow()" title="减少一行（Alt+R）">－ 减少一行</button>
       <span class="sep"></span>
-      <button onclick="addJudge()">＋ 增加评委</button>
-      <button onclick="delJudge()">－ 减少评委</button>
+      <button onclick="addJudge()" title="增加评委（Ctrl+J / Alt+J）">＋ 增加评委</button>
+      <button onclick="delJudge()" title="减少评委（Alt+K）">－ 减少评委</button>
       <span class="sep"></span>
-      <button onclick="sortByNo()">序号排序</button>
-      <button onclick="sortByScore()">分数排序</button>
+      <button onclick="sortByNo()" title="按序号排序（Alt+S）">序号排序</button>
+      <button onclick="sortByScore()" title="按分数排序（Alt+P）">分数排序</button>
       <span class="sep"></span>
       <button id="btnUndo" onclick="undo()" disabled title="撤销  Ctrl+Z">↶ 撤销</button>
       <button id="btnRedo" onclick="redo()" disabled title="重做  Ctrl+Y">↷ 重做</button>
       <span class="sep"></span>
-      <button onclick="resetSettings()">恢复默认设置</button>
-      <button class="danger" onclick="clearAll()">清空全部</button>
+      <button onclick="resetSettings()" title="恢复所有设置（不清除分数）">恢复默认设置</button>
+      <button class="danger" onclick="clearAll()" title="清空所有节目和分数">清空全部</button>
+      <span class="sep"></span>
+      <button onclick="showShortcuts()" title="查看所有快捷键（F1）">⌨ 快捷键</button>
     </div>
   </div>
 
@@ -479,7 +518,7 @@
 1	《示例节目一》	示例团队一	示例单位A
 2	《示例节目二》	示例团队二	示例单位B"></textarea>
     <div class="btnrow" style="margin-top:8px">
-      <button class="primary" onclick="doImport()">导入到表格</button>
+      <button class="primary" onclick="doImport()" title="导入节目名单（Ctrl+I / F5）">导入到表格</button>
       <button onclick="document.getElementById('importBox').value=''">清空输入框</button>
       <span id="importCount" style="font-size:12px;color:#8f959e">等待粘贴…</span>
     </div>
@@ -508,9 +547,9 @@
     </div>
 
     <div class="btnrow" style="margin-top:10px">
-      <button class="primary" onclick="exportExcel()">导出 Excel</button>
-      <button onclick="exportImage()">导出图片</button>
-      <button onclick="doPrint()">打印结果</button>
+      <button class="primary" onclick="exportExcel()" title="导出 Excel（Ctrl+E）">导出 Excel</button>
+      <button onclick="exportImage()" title="导出图片（Ctrl+Shift+E）">导出图片</button>
+      <button onclick="doPrint()" title="打印（Ctrl+P）">打印结果</button>
     </div>
   </div>
 
@@ -518,8 +557,8 @@
   <div class="panel no-print">
     <div class="panel-title">比赛设置存档</div>
     <div class="btnrow">
-      <button class="primary" onclick="exportSetup()">导出比赛设置</button>
-      <button onclick="document.getElementById('setupFile').click()">导入比赛设置</button>
+      <button class="primary" onclick="exportSetup()" title="备份所有设置和分数（Ctrl+S）">导出比赛设置</button>
+      <button onclick="document.getElementById('setupFile').click()" title="导入备份文件（Ctrl+O）">导入比赛设置</button>
       <input type="file" id="setupFile" accept=".json,.jsonl,.txt" style="display:none" onchange="importSetup(this)">
       <span class="hint" style="font-size:12px;color:#8f959e">
         把节目单、评分规则、标题全部打包成文件。下次导入即可直接开始打分。
@@ -535,6 +574,7 @@
 
 <div class="toast" id="toast"></div>
 <div class="colmenu" id="colMenu"></div>
+<div class="shortcut-panel" id="shortcutPanel"></div>
 <div class="ctxmenu" id="ctxMenu">
   <div class="item" onclick="ctxInsertRow('above')">
     <span class="ico">⬆</span>在上方插入一行
@@ -3405,24 +3445,148 @@ window.addEventListener('resize', () => { hideCtxMenu(); hideCellMenu(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { hideCtxMenu(); hideCellMenu(); }
 
-  // 撤销 / 重做
+  // ===== 全局快捷键（参照 Word 习惯）=====
   const ctrl = e.ctrlKey || e.metaKey;
-  if (ctrl && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
-    // 如果焦点在输入框且有文本选中/可撤销，优先让浏览器处理输入框内的撤销？
-    // 这里统一走全局撤销，避免两套逻辑打架
-    e.preventDefault();
-    undo();
+  const shift = e.shiftKey;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+  // 在输入框里时，只放行少数全局快捷键
+  const inInput = /^(INPUT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName);
+  const inScoreCell = inInput && document.activeElement.closest && document.activeElement.closest('td.score');
+
+  const run = fn => { e.preventDefault(); fn(); };
+
+  // ---- 撤销 / 重做 ----
+  if (ctrl && !shift && k === 'z') { run(undo); return; }
+  if (ctrl && (shift && k === 'z' || k === 'y')) { run(redo); return; }
+
+  // 以下快捷键：在普通输入框里不拦截（避免影响打字）
+  // 但 Alt 组合键、F 功能键、Ctrl+S 仍放行
+  const isFn = /^F\d+$/.test(e.key);
+  if (inInput && !inScoreCell && !e.altKey && !isFn) {
+    if (ctrl && k === 's') { run(exportSetup); return; }
     return;
   }
-  if (ctrl && ((e.shiftKey && (e.key === 'z' || e.key === 'Z')) || e.key === 'y' || e.key === 'Y')) {
-    e.preventDefault();
-    redo();
+
+  // ---- Ctrl 系列 ----
+  if (ctrl) {
+    if (!shift && k === 's') { run(exportSetup); return; }      // 保存（导出比赛设置）
+    if (!shift && k === 'o') { run(() => document.getElementById('setupFile').click()); return; } // 打开（导入设置）
+    if (!shift && k === 'p') { run(doPrint); return; }          // 打印
+    if (!shift && k === 'e') { run(exportExcel); return; }      // 导出 Excel
+    if (shift && k === 'e') { run(exportImage); return; }       // 导出图片
+    if (!shift && k === 'i') { run(doImport); return; }         // 导入节目名单
+    if (!shift && k === 'd') { run(addRow); return; }           // 增加一行
+    if (!shift && k === 'j') { run(addJudge); return; }         // 增加评委
+    if (!shift && (k === 'n' || k === 'N')) { run(addCustomCol); return; } // 增加自定义列
+    if (!shift && k === '1') { run(() => setDecimals(0)); return; }
+    if (!shift && k === '2') { run(() => setDecimals(1)); return; }
+    if (!shift && k === '3') { run(() => setDecimals(2)); return; }
+    if (!shift && k === '4') { run(() => setDecimals(3)); return; }
     return;
+  }
+
+  // ---- Alt 系列（行/评委的增删、排序）----
+  if (e.altKey) {
+    if (!shift && (k === 'ArrowUp' || k === 'i'))   { run(addRow); return; }
+    if (!shift && (k === 'ArrowDown' || k === 'r')) { run(delRow); return; }
+    if (!shift && k === 'j')         { run(addJudge); return; }
+    if (!shift && k === 'k')         { run(delJudge); return; }
+    if (!shift && k === 's')         { run(sortByNo); return; }      // 序号排序
+    if (!shift && k === 'p')         { run(sortByScore); return; }   // 分数排序
+    return;
+  }
+
+  // ---- F 系列 ----
+  if (e.key === 'F1') { run(showShortcuts); return; }
+  if (e.key === 'F5') { run(doImport); return; }
+
+  // ---- 无修饰键 ----
+  if (!shift && !e.altKey) {
+    if (k === '?') { run(showShortcuts); return; }
   }
 });
 
 /* ---------------- 活动标题 ---------------- */
 const DEFAULT_TITLE = '评分表';
+
+/* ============================================================
+   快捷键说明面板
+   ============================================================ */
+const SHORTCUTS = [
+  { group: '编辑', items: [
+    ['Ctrl + Z', '撤销'],
+    ['Ctrl + Y', '重做'],
+    ['Ctrl + Shift + Z', '重做'],
+  ]},
+  { group: '行与评委', items: [
+    ['Ctrl + D', '增加一行'],
+    ['Alt + I', '增加一行'],
+    ['Alt + ↑', '增加一行'],
+    ['Alt + R', '减少一行（删最后一行）'],
+    ['Alt + ↓', '减少一行'],
+    ['Ctrl + J', '增加评委'],
+    ['Alt + J', '增加评委'],
+    ['Alt + K', '减少评委'],
+  ]},
+  { group: '排序', items: [
+    ['Alt + S', '序号排序'],
+    ['Alt + P', '分数排序'],
+  ]},
+  { group: '导入导出', items: [
+    ['Ctrl + I', '导入节目名单'],
+    ['F5', '导入节目名单'],
+    ['Ctrl + S', '导出比赛设置（备份）'],
+    ['Ctrl + O', '导入比赛设置'],
+    ['Ctrl + E', '导出 Excel'],
+    ['Ctrl + Shift + E', '导出图片'],
+    ['Ctrl + P', '打印结果'],
+  ]},
+  { group: '设置', items: [
+    ['Ctrl + 1', '小数位：整数'],
+    ['Ctrl + 2', '小数位：一位'],
+    ['Ctrl + 3', '小数位：两位'],
+    ['Ctrl + 4', '小数位：三位'],
+    ['Ctrl + N', '增加自定义列'],
+  ]},
+  { group: '表格内', items: [
+    ['↑ ↓ ← →', '移动光标'],
+    ['Shift + ↑↓←→', '扩展选区'],
+    ['Ctrl + 点击', '加选单元格'],
+    ['拖拽鼠标', '框选一片区域'],
+    ['Enter', '下移一格'],
+    ['Tab / Shift+Tab', '右移 / 左移一格'],
+    ['Ctrl + C', '复制选中区域'],
+    ['Esc', '取消选中'],
+  ]},
+  { group: '帮助', items: [
+    ['F1 或 ?', '显示/关闭本说明'],
+  ]},
+];
+
+function showShortcuts() {
+  const box = document.getElementById('shortcutPanel');
+  if (!box) return;
+
+  if (box.classList.contains('show')) { box.classList.remove('show'); return; }
+
+  let html = `<div class="sc-head">
+      <span>键盘快捷键</span>
+      <span class="sc-close" onclick="showShortcuts()">×</span>
+    </div><div class="sc-body">`;
+
+  SHORTCUTS.forEach(g => {
+    html += `<div class="sc-group"><div class="sc-gtitle">${esc(g.group)}</div>`;
+    g.items.forEach(([key, desc]) => {
+      html += `<div class="sc-row"><kbd>${esc(key)}</kbd><span>${esc(desc)}</span></div>`;
+    });
+    html += `</div>`;
+  });
+
+  html += `</div>`;
+  box.innerHTML = html;
+  box.classList.add('show');
+}
 
 function renderTitle() {
   // 表格上方的标题输入框（可直接编辑）
