@@ -194,6 +194,13 @@
   td input.cell::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
   /* 分数格：最高/最低高亮 */
+  /* 多选高亮（优先于最高/最低） */
+  tbody td.score.selected {
+    background: #dbeafe !important;
+    box-shadow: inset 0 0 0 2px #3370ff !important;
+  }
+  tbody td.score.selected input { color: #1d4ed8; font-weight: 600; }
+
   td.score.highest { background: #fff1f0; box-shadow: inset 0 0 0 2px #f54a45; }
   td.score.highest input { color: #c92a2a; font-weight: 700; }
   td.score.lowest  { background: #e8f7ff; box-shadow: inset 0 0 0 2px #1a7fd4; }
@@ -371,11 +378,12 @@
 
     <div class="btnrow">
       <span class="lbl">满分</span>
-      <button id="btnMax10"  onclick="setMax(10)">10 分</button>
-      <button id="btnMax100" onclick="setMax(100)">100 分</button>
+      <input type="number" id="maxScoreInput" class="num-input" min="1" max="9999" step="any"
+             oninput="onMaxScoreInput()" title="可填任意满分，如 10、100">
       <span class="sep"></span>
       <span class="lbl">小数位</span>
       <button id="btnDec0" onclick="setDecimals(0)">整数</button>
+      <button id="btnDec1" onclick="setDecimals(1)">一位</button>
       <button id="btnDec2" onclick="setDecimals(2)">两位</button>
       <button id="btnDec3" onclick="setDecimals(3)">三位</button>
     </div>
@@ -582,9 +590,8 @@ function toast(msg) {
 }
 
 /* ---------------- 分数解析 ----------------
-   规则：用户输入纯数字，按小数位在末尾插入小数点
-   10分/2位：928 → 9.28 ；1000 → 10.00
-   如果用户自己打了小数点，则直接按小数解析
+   规则：纯手动输入，不再自动插小数点
+   输入 9.28 就是 9.28，输入 928 就是 928（会超满分被拦下）
 ------------------------------------------- */
 function parseScore(raw, maxScore, decimals) {
   if (raw === null || raw === undefined) return null;
@@ -594,16 +601,8 @@ function parseScore(raw, maxScore, decimals) {
   s = s.replace(/[^\d.\-]/g, '');
   if (s === '' || s === '.' || s === '-') return null;
 
-  // 用户主动打了小数点 → 直接解析
-  if (s.includes('.')) {
-    const v = parseFloat(s);
-    return isNaN(v) ? null : v;
-  }
-
-  const n = parseInt(s, 10);
-  if (isNaN(n)) return null;
-  if (decimals === 0) return n;
-  return n / Math.pow(10, decimals);
+  const v = parseFloat(s);
+  return isNaN(v) ? null : v;
 }
 
 // 格式化显示
@@ -778,185 +777,128 @@ function renderBody() {
     for (let i = 0; i < state.judgeCount; i++) {
       const td = document.createElement('td');
       td.className = 'score';
+      td.dataset.row = ri;
+      td.dataset.col = i;
       if (st.highest.includes(i)) td.classList.add('highest');
       if (st.lowest.includes(i)) td.classList.add('lowest');
       if (st.dropped.includes(i)) td.classList.add('dropped');
 
       const inp = document.createElement('input');
       inp.type = 'text';
-      inp.inputMode = 'numeric';
+      inp.inputMode = 'decimal';
       inp.className = 'cell';
-      // 显示换算后的值（如 9.86），数据里存原始输入（如 "986"）
-      const initV = parseScore(row.scores[i], state.maxScore, state.decimals);
-      inp.value = initV === null ? '' : fmtScore(initV, state.decimals);
+      inp.dataset.row = ri;
+      inp.dataset.col = i;
+
+      // 直接显示存的原值（不做格式化）
+      const cur = row.scores[i];
+      inp.value = (cur === undefined || cur === null) ? '' : String(cur);
       inp.placeholder = '';
-      inp.tabIndex = 60 + ri * 100 + 10 + i;
-      inp.title = `直接输入数字自动换算（满分 ${state.maxScore}）`;
-      inp._lastGood = inp.value;
+      inp.tabIndex = -1;   // 用自定义方向键导航，不参与 Tab
+      inp.title = `满分 ${state.maxScore}`;
 
-      /* ============ 核心：用 keydown 自己维护原始输入串 ============
-         为什么不用 oninput？
-         因为 oninput 拿到的 inp.value 是「已格式化的显示值 + 新敲字符」，
-         再换算就会二次换算（9.86 → 敲 855 → "9.86855" → 错）。
-         所以这里用 _raw 记录用户真正敲的原始数字串。 */
+      /* ============ 简化版：纯手动输入 ============
+         不再自动插小数点，用户输 9.28 就是 9.28。
+         直接改输入框即可编辑，不会「一改数字就没了」。 */
 
-      inp._raw = (row.scores[i] === undefined || row.scores[i] === null) ? '' : String(row.scores[i]);
+      const commit = () => {
+        const raw = inp.value.trim();
 
-      // 把 _raw 同步到显示 + 数据
-      const commitRaw = () => {
-        const raw = inp._raw;
-
-        if (raw === '' || raw === '-' || raw === '.') {
-          if (raw === '') {
-            delete row.scores[i];
-            inp.value = '';
-            inp._lastGood = '';
-            inp.classList.remove('invalid');
-          } else {
-            inp.value = raw;
-          }
+        // 空 → 清空
+        if (raw === '') {
+          delete row.scores[i];
+          inp.classList.remove('invalid');
           save();
           refreshStats();
           return;
         }
 
-        const v = parseScore(raw, state.maxScore, state.decimals);
-        if (v === null) { save(); refreshStats(); return; }
+        // 非数字字符 → 过滤掉
+        const cleaned = raw.replace(/[^\d.\-]/g, '');
+        if (cleaned !== raw) {
+          inp.value = cleaned;
+        }
+        if (cleaned === '' || cleaned === '.' || cleaned === '-') {
+          save();
+          refreshStats();
+          return;
+        }
 
-        // 超满分 → 按满分计
-        if (v > state.maxScore) {
+        const v = parseFloat(cleaned);
+        if (isNaN(v)) {
+          save();
+          refreshStats();
+          return;
+        }
+
+        // 超满分 → 标红但不改值（让用户自己看到错了）
+        if (v > state.maxScore || v < 0) {
           inp.classList.add('invalid');
-          const rawFull = state.decimals === 0
-            ? String(state.maxScore)
-            : String(Math.round(state.maxScore * Math.pow(10, state.decimals)));
-          inp._raw = rawFull;
-          row.scores[i] = rawFull;
-          inp.value = fmtScore(state.maxScore, state.decimals);
-          inp._lastGood = inp.value;
-          save();
-          refreshStats();
-          toast(`不能超过满分 ${state.maxScore}，已按满分计`);
-          return;
-        }
-
-        // 负数 → 回滚
-        if (v < 0) {
-          inp.classList.add('invalid');
-          inp.value = inp._lastGood || '';
+          row.scores[i] = cleaned;
           save();
           refreshStats();
           return;
         }
 
-        // 合法
         inp.classList.remove('invalid');
-        row.scores[i] = raw;
-        inp.value = fmtScore(v, state.decimals);
-        inp._lastGood = inp.value;
+        row.scores[i] = cleaned;
         save();
         refreshStats();
       };
 
-      // 键盘输入：自己累积原始串
-      inp.addEventListener('keydown', (e) => {
-        // Enter / Tab：移动焦点
-        if (e.key === 'Enter' || e.key === 'Tab') {
-          e.preventDefault();
-          moveFocus(inp, e.shiftKey ? -1 : 1);
-          return;
-        }
-
-        // 功能键放行
-        if (e.key === 'Escape' || e.ctrlKey || e.metaKey || e.altKey ||
-            e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
-            e.key === 'Home' || e.key === 'End') {
-          return;
-        }
-
-        // 退格：删掉原始串最后一位（刚聚焦时直接清空）
-        if (e.key === 'Backspace') {
-          e.preventDefault();
-          if (inp._freshInput) {
-            inp._raw = '';
-            inp._freshInput = false;
-          } else {
-            inp._raw = inp._raw.slice(0, -1);
-          }
-          commitRaw();
-          return;
-        }
-
-        // 删除：清空
-        if (e.key === 'Delete') {
-          e.preventDefault();
-          inp._raw = '';
-          commitRaw();
-          return;
-        }
-
-        // 数字 0-9
-        if (/^[0-9]$/.test(e.key)) {
-          e.preventDefault();
-          // 聚焦后第一次按键：清空重来
-          if (inp._freshInput) {
-            inp._raw = '';
-            inp._freshInput = false;
-          }
-          inp._raw += e.key;
-          commitRaw();
-          return;
-        }
-
-        // 小数点（用户想直接输小数）
-        if (e.key === '.') {
-          e.preventDefault();
-          if (inp._freshInput) {
-            inp._raw = '';
-            inp._freshInput = false;
-          }
-          if (!inp._raw.includes('.')) {
-            inp._raw += '.';
-            inp.value = inp._raw;
-          }
-          return;
-        }
-
-        // 其他字符一律忽略
-        if (e.key.length === 1) {
-          e.preventDefault();
-        }
-      });
-
-      // 粘贴：只取数字
-      inp.addEventListener('paste', (e) => {
-        e.preventDefault();
-        const t = (e.clipboardData || window.clipboardData).getData('text/plain') || '';
-        const digits = t.replace(/[^\d.]/g, '');
-        if (!digits) return;
-        inp._raw = digits;
-        commitRaw();
-      });
-
-      // 聚焦：全选；并标记「下一次输入是全新开始」
-      inp.onfocus = () => {
-        inp._freshInput = true;
-        inp.select();
-      };
-
-      // 点击时：如果已经聚焦（onfocus 不再触发），也重置为全新输入
-      inp.addEventListener('mousedown', () => {
-        if (document.activeElement === inp) {
-          inp._freshInput = true;
-          setTimeout(() => inp.select(), 0);
-        }
-      });
-
-      // 失焦：规范化显示
-      inp.onblur = () => {
+      // 直接监听 input，简单可靠
+      inp.addEventListener('input', commit);
+      inp.addEventListener('blur', () => {
+        // 失焦时按小数位规范显示
         const v = parseScore(row.scores[i], state.maxScore, state.decimals);
         inp.value = (v === null) ? '' : fmtScore(v, state.decimals);
-        inp._lastGood = inp.value;
-      };
+      });
+      // 聚焦时全选，方便直接覆盖
+      inp.addEventListener('focus', () => {
+        inp.select();
+        noteCursor(inp);
+      });
+
+      // 方向键导航
+      inp.addEventListener('keydown', (e) => {
+        const extend = e.shiftKey;
+        let handled = true;
+        switch (e.key) {
+          case 'ArrowUp':    handled = navByArrow(inp, -1, 0, extend); break;
+          case 'ArrowDown':  handled = navByArrow(inp,  1, 0, extend); break;
+          case 'ArrowLeft':  handled = navByArrow(inp,  0, -1, extend); break;
+          case 'ArrowRight': handled = navByArrow(inp,  0,  1, extend); break;
+          case 'Enter':      handled = navByArrow(inp,  1, 0, false); break;
+          case 'Tab':        handled = navByArrow(inp,  0, e.shiftKey ? -1 : 1, false); break;
+          case 'Escape':     clearCellSelection(); handled = false; break;
+          default: handled = false;
+        }
+        if (handled) e.preventDefault();
+      });
+
+      // Ctrl/Cmd + 点击：加选（在捕获阶段处理，避免被拖拽逻辑清掉）
+      inp.addEventListener('mousedown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.stopPropagation();   // 不让文档级拖拽逻辑介入
+          e.preventDefault();    // 不改变文本选区
+          const r = parseInt(inp.dataset.row, 10);
+          const c = parseInt(inp.dataset.col, 10);
+          const td = inp.closest('td.score');
+          if (td) {
+            // 如果当前没有任何选区，先把当前格选中
+            if (!document.querySelector('td.score.selected')) {
+              td.classList.add('selected');
+            } else {
+              td.classList.toggle('selected');
+            }
+            cellAnchor = { row: r, col: c };
+            cellCursor = { row: r, col: c };
+          }
+          suppressClickClear = true;
+          setTimeout(() => { suppressClickClear = false; }, 50);
+        }
+      }, true);
+
       td.appendChild(inp);
       tr.appendChild(td);
     }
@@ -1525,6 +1467,197 @@ function moveFocus(fromEl, dir) {
   }
 }
 
+/* ============================================================
+   鼠标拖拽框选（在分数格区域）
+   ============================================================ */
+let dragStart = null;
+let isDragging = false;
+let suppressClickClear = false;
+
+document.addEventListener('mousedown', (e) => {
+  const td = e.target.closest && e.target.closest('td.score');
+  if (!td) { dragStart = null; isDragging = false; return; }
+  if (e.button !== 0) return;   // 只处理左键
+  if (e.ctrlKey || e.metaKey) return;   // Ctrl+点击走加选
+
+  const tr = td.closest('tr');
+  const tbody = document.getElementById('tbody');
+  const row = [...tbody.children].indexOf(tr);
+  const scoreTds = [...tr.querySelectorAll('td.score')];
+  const col = scoreTds.indexOf(td);
+  if (row < 0 || col < 0) return;
+
+  dragStart = { row, col };
+  isDragging = false;
+  clearCellSelection();
+  cellAnchor = { row, col };
+}, true);
+
+document.addEventListener('mousemove', (e) => {
+  if (!dragStart) return;
+  const td = e.target.closest && e.target.closest('td.score');
+  if (!td) return;
+
+  const tr = td.closest('tr');
+  const tbody = document.getElementById('tbody');
+  const row = [...tbody.children].indexOf(tr);
+  const scoreTds = [...tr.querySelectorAll('td.score')];
+  const col = scoreTds.indexOf(td);
+  if (row < 0 || col < 0) return;
+
+  // 移动超过一格才算拖拽
+  if (row !== dragStart.row || col !== dragStart.col) {
+    isDragging = true;
+    applyRectSelection(dragStart, { row, col });
+    cellCursor = { row, col };
+  }
+}, true);
+
+document.addEventListener('mouseup', () => {
+  if (dragStart && isDragging) {
+    // 拖拽结束：保留选区，并阻止后续 click 清空
+    suppressClickClear = true;
+    setTimeout(() => { suppressClickClear = false; }, 50);
+  } else if (dragStart && !isDragging) {
+    // 单击：选中当前格（作为多选的基础）
+    applyRectSelection(dragStart, dragStart);
+    suppressClickClear = true;
+    setTimeout(() => { suppressClickClear = false; }, 50);
+  }
+  dragStart = null;
+  isDragging = false;
+}, true);
+
+// 复制选区内容（Ctrl+C 在表格里）
+document.addEventListener('copy', (e) => {
+  const sel = document.querySelectorAll('td.score.selected');
+  if (!sel.length) return;   // 没有表格选区，走正常复制
+
+  // 计算选区的行列范围
+  let r1 = 1e9, r2 = -1, c1 = 1e9, c2 = -1;
+  sel.forEach(td => {
+    const inp = td.querySelector('input');
+    if (!inp) return;
+    const r = parseInt(inp.dataset.row, 10);
+    const c = parseInt(inp.dataset.col, 10);
+    if (isNaN(r) || isNaN(c)) return;
+    r1 = Math.min(r1, r); r2 = Math.max(r2, r);
+    c1 = Math.min(c1, c); c2 = Math.max(c2, c);
+  });
+  if (r2 < 0) return;
+
+  const text = collectSelection(r1, c1, r2, c2);
+  e.clipboardData.setData('text/plain', text);
+  e.preventDefault();
+  toast(`已复制 ${r2 - r1 + 1} 行 × ${c2 - c1 + 1} 列`);
+});
+
+// 点击非分数格区域清除选区
+document.addEventListener('click', (e) => {
+  if (suppressClickClear) return;   // 拖拽刚结束，别清
+  if (!e.target.closest || !e.target.closest('td.score')) {
+    if (!e.target.closest || !e.target.closest('.ctxmenu')) {
+      clearCellSelection();
+      cellAnchor = null;
+    }
+  }
+});
+
+
+
+// 当前锚点（多选的起点）
+let cellAnchor = null;     // {row, col}
+let cellCursor = null;     // {row, col} 当前活动格
+
+// 获取某个坐标的 input
+function getCellInput(row, col) {
+  const tr = document.querySelectorAll('#tbody tr')[row];
+  if (!tr) return null;
+  // 列索引：0=序号, 1..N=文本, N+1..=评委分
+  const cells = tr.querySelectorAll('td');
+  let idx = -1;
+  if (col === 'no') idx = 0;
+  else if (typeof col === 'number' && col >= 0 && col < 10) {
+    // col 是评委序号
+    idx = 1 + state.textOrder.length + col;
+  }
+  const td = cells[idx];
+  return td ? td.querySelector('input.cell') : null;
+}
+
+// 记录当前格坐标
+function noteCursor(inp) {
+  if (!inp) return;
+  const r = parseInt(inp.dataset.row, 10);
+  const c = parseInt(inp.dataset.col, 10);
+  if (!isNaN(r) && !isNaN(c) && inp.closest('td.score')) {
+    cellCursor = { row: r, col: c };
+  }
+}
+
+// 方向键导航（只在评委分数格内有效）
+function navByArrow(inp, dRow, dCol, extend) {
+  const r = parseInt(inp.dataset.row, 10);
+  const c = parseInt(inp.dataset.col, 10);
+  if (isNaN(r) || isNaN(c)) return false;
+
+  const nr = Math.max(0, Math.min(state.rows.length - 1, r + dRow));
+  const nc = Math.max(0, Math.min(state.judgeCount - 1, c + dCol));
+
+  const target = getCellInput(nr, nc);
+  if (!target) return false;
+
+  if (extend) {
+    // Shift+方向键：扩展选区
+    if (!cellAnchor) cellAnchor = { row: r, col: c };
+    applyRectSelection(cellAnchor, { row: nr, col: nc });
+  } else {
+    clearCellSelection();
+    cellAnchor = null;
+  }
+
+  target.focus();
+  target.select && target.select();
+  cellCursor = { row: nr, col: nc };
+
+  // 滚动到可见
+  target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  return true;
+}
+
+/* ---------------- 多选支持 ---------------- */
+function clearCellSelection() {
+  document.querySelectorAll('td.score.selected').forEach(td => td.classList.remove('selected'));
+}
+
+function applyRectSelection(a, b) {
+  clearCellSelection();
+  const r1 = Math.min(a.row, b.row), r2 = Math.max(a.row, b.row);
+  const c1 = Math.min(a.col, b.col), c2 = Math.max(a.col, b.col);
+
+  for (let r = r1; r <= r2; r++) {
+    for (let c = c1; c <= c2; c++) {
+      const tr = document.querySelectorAll('#tbody tr')[r];
+      if (!tr) continue;
+      const td = tr.querySelectorAll('td.score')[c];
+      if (td) td.classList.add('selected');
+    }
+  }
+}
+
+// 从选区收集数据（用于复制）
+function collectSelection(r1, c1, r2, c2) {
+  const rows = [];
+  for (let r = r1; r <= r2; r++) {
+    const line = [];
+    for (let c = c1; c <= c2; c++) {
+      line.push(String(state.rows[r].scores[c] ?? ''));
+    }
+    rows.push(line);
+  }
+  return rows.map(l => l.join('\t')).join('\n');
+}
+
 /* ---------------- 列头下拉菜单 ---------------- */
 function openColMenu(ev, pos) {
   ev.stopPropagation();
@@ -1577,13 +1710,13 @@ document.addEventListener('click', () => {
 });
 
 /* ---------------- 规则变更 ---------------- */
-function setMax(v) {
-  if (state.maxScore === v) return;
+/* 满分：直接输入任意数字 */
+function onMaxScoreInput() {
+  const v = parseFloat(document.getElementById('maxScoreInput').value);
+  if (isNaN(v) || v <= 0) return;
   state.maxScore = v;
   save();
-  updateRuleButtons();
   renderBody();
-  toast(`满分设为 ${v} 分`);
 }
 
 function setDecimals(v) {
@@ -1697,11 +1830,13 @@ function onDrawOrderChange() {
 }
 
 function updateRuleButtons() {
-  document.getElementById('btnMax10').classList.toggle('on', state.maxScore === 10);
-  document.getElementById('btnMax100').classList.toggle('on', state.maxScore === 100);
-  document.getElementById('btnDec0').classList.toggle('on', state.decimals === 0);
-  document.getElementById('btnDec2').classList.toggle('on', state.decimals === 2);
-  document.getElementById('btnDec3').classList.toggle('on', state.decimals === 3);
+  const mi = document.getElementById('maxScoreInput');
+  if (mi) mi.value = state.maxScore;
+
+  ['btnDec0', 'btnDec1', 'btnDec2', 'btnDec3'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('on', state.decimals === i);
+  });
 }
 
 /* ---------------- 行操作 ---------------- */

@@ -25,7 +25,7 @@ except ImportError:
 
 # 被测文件（可传参覆盖）
 BASE = Path(__file__).resolve().parent.parent
-DEFAULT_FILE = BASE / "dist" / "example.html"
+DEFAULT_FILE = BASE / "成品" / "示例活动评分表.html"
 TARGET = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_FILE
 URL = TARGET.as_uri()
 
@@ -54,10 +54,10 @@ def main():
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
 
-        pg.goto(URL)
-        pg.wait_for_timeout(800)
+        pg.goto(URL, wait_until="load")
+        pg.wait_for_timeout(600)
         pg.evaluate("() => localStorage.clear()")
-        pg.reload()
+        pg.reload(wait_until="load")
         pg.wait_for_timeout(900)
 
         # ============ 1. 页面加载 ============
@@ -68,21 +68,19 @@ def main():
         rows = pg.evaluate("() => state.rows.length")
         ck("至少有 20 行", rows >= 20, str(rows))
 
-        # ============ 2. 分数换算 ============
-        section("【2】分数换算（核心）")
+        # ============ 2. 分数解析（纯手动，不自动加点）============
+        section("【2】分数解析（纯手动输入）")
         cases = [
-            ('928', 10, 2, 9.28),
-            ('1000', 10, 2, 10.0),
-            ('85', 10, 2, 0.85),
-            ('9.5', 10, 2, 9.5),
-            ('9850', 100, 2, 98.5),
-            ('95', 10, 0, 95),
-            ('9285', 10, 3, 9.285),
+            ('98.66', 100, 2, 98.66),
+            ('85', 100, 2, 85.0),
+            ('9.5', 100, 2, 9.5),
+            ('100', 100, 2, 100.0),
+            ('0.5', 10, 2, 0.5),
         ]
         for raw, mx, dec, exp in cases:
-            got = pg.evaluate("([r,m,d]) => parseScore(r,m,d)", [raw, mx, dec])
+            got = pg.evaluate("(a) => parseScore(a[0], a[1], a[2])", [raw, mx, dec])
             ok = got is not None and abs(got - exp) < 1e-9
-            ck(f"'{raw}' ({mx}分/{dec}位) → {exp}", ok, f"实得 {got}")
+            ck(f"'{raw}' → {exp}", ok, f"实得 {got}")
 
         # ============ 3. 平均分与名次 ============
         section("【3】平均分与名次")
@@ -90,9 +88,9 @@ def main():
             state.maxScore=10; state.decimals=2; state.judgeCount=5;
             state.dropHighLow=false; state.awards={first:0,second:0,third:0};
             state.rows=[];
-            state.rows.push({id:'a',no:1,name:'A',actor:'',unit:'',scores:['928','850','900','880','950']});
-            state.rows.push({id:'b',no:2,name:'B',actor:'',unit:'',scores:['700','750','800','700','750']});
-            state.rows.push({id:'c',no:3,name:'C',actor:'',unit:'',scores:['1000','900','950','1000','900']});
+            state.rows.push({id:'a',no:1,name:'A',actor:'',unit:'',scores:['9.28','8.50','9.00','8.80','9.50']});
+            state.rows.push({id:'b',no:2,name:'B',actor:'',unit:'',scores:['7.00','7.50','8.00','7.00','7.50']});
+            state.rows.push({id:'c',no:3,name:'C',actor:'',unit:'',scores:['10.00','9.00','9.50','10.00','9.00']});
             for(let i=4;i<=20;i++) state.rows.push(makeEmptyRow(i));
             save(); renderHead(); renderBody();
         }""")
@@ -110,7 +108,7 @@ def main():
         # ============ 4. 去最高最低 ============
         section("【4】去掉一个最高分和一个最低分")
         pg.evaluate("""() => {
-            state.rows[0].scores = ['928','850','900','880','950'];
+            state.rows[0].scores = ['9.28','8.50','9.00','8.80','9.50'];
             state.dropHighLow = true;
             save(); renderBody();
         }""")
@@ -176,13 +174,11 @@ def main():
             dl.value.save_as(tmp)
             html = open(tmp, encoding='utf-8-sig').read()
             heads = re.findall(r'<th>([^<]+)</th>', html)
-            # 勾选「平均分」时，若开启了分数修正，会自动带出「分数修正」「最终成绩」两列
-            expect_cols = 4 + (2 if pg.evaluate("() => state.showAdjust") else 0)
-            ck("按勾选导出列数", len(heads) == expect_cols, f"{len(heads)} 列: {heads}")
+            # 只勾了 序号/节目名称/平均分/名次（分数修正、最终成绩是独立勾选，此处未勾）
+            ck("按勾选导出列数", len(heads) == 4, f"{len(heads)} 列: {heads}")
             ck("含序号/节目名称/平均分/名次",
                all(h in heads for h in ['序号','节目名称','平均分','名次']), str(heads))
-            if pg.evaluate("() => state.showAdjust"):
-                ck("含分数修正/最终成绩", '分数修正' in heads and '最终成绩' in heads, str(heads))
+            ck("未勾选时不导出分数修正", '分数修正' not in heads, str(heads))
         except Exception as e:
             ck("导出 Excel", False, str(e)[:60])
 
@@ -190,7 +186,7 @@ def main():
         section("【8】数据持久化")
         pg.evaluate("""() => {
             state.rows[0].name = '持久化测试';
-            state.rows[0].scores = ['999','888','777','666','555'];
+            state.rows[0].scores = ['9.99','8.88','7.77','6.66','5.55'];
             state.title = '测试标题';
             save();
         }""")
@@ -202,20 +198,20 @@ def main():
             title: state.title
         })""")
         ck("刷新后节目名保留", kept['name'] == '持久化测试', kept['name'])
-        ck("刷新后分数保留", kept['scores'] == ['999','888','777','666','555'], str(kept['scores']))
+        ck("刷新后分数保留", kept['scores'] == ['9.99','8.88','7.77','6.66','5.55'], str(kept['scores']))
         ck("刷新后标题保留", kept['title'] == '测试标题', kept['title'])
 
         # ============ 9. 恢复默认设置 ============
         section("【9】恢复默认设置（分数要保留）")
         # 先把第1行名字恢复成预置名（前面持久化测试改过名）
         pg.evaluate("""() => {
-            state.rows[0].name = '《示例节目一》';
-            state.rows[0].actor = '示例演出团队一';
+            state.rows[0].name = '《倒采茶》';
+            state.rows[0].actor = '中老年舞蹈健身协会';
             state.maxScore = 100;
             state.decimals = 3;
             state.judgeCount = 7;
             state.awards = {first:1,second:2,third:3};
-            state.rows[0].scores = ['9800','9700','9600','9500','9400','9300','9200'];
+            state.rows[0].scores = ['98.00','97.00','96.00','95.00','94.00','93.00','92.00'];
             save(); renderBody();
         }""")
         pg.wait_for_timeout(250)
@@ -230,7 +226,7 @@ def main():
         ck("小数位恢复 2", reset['dec'] == 2, str(reset['dec']))
         ck("评委恢复 5", reset['judges'] == 5, str(reset['judges']))
         ck("奖项恢复 0", reset['awards'] == {'first':0,'second':0,'third':0}, str(reset['awards']))
-        ck("★分数没被清除", len(reset['score0']) >= 5 and reset['score0'][0] == '9800', str(reset['score0'][:3]))
+        ck("★分数没被清除", len(reset['score0']) >= 5 and reset['score0'][0] == '98.00', str(reset['score0'][:3]))
 
         # ============ 10. 抽签切换 ============
         section("【10】现场抽签顺序切换")
@@ -306,5 +302,13 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
+
+
+
+
+
 
 
