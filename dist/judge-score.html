@@ -96,6 +96,36 @@
   button:disabled { opacity: .4; cursor: not-allowed; }
   button:disabled:hover { border-color: #d9dde3; color: #1f2329; }
 
+  /* ============ 排序按钮（醒目）============ */
+  button.sort-btn {
+    font-weight: 700; font-size: 13.5px;
+    padding: 7px 16px;
+    background: linear-gradient(180deg, #f0f5ff 0%, #e3ecff 100%);
+    border: 1.5px solid #8bb0ff;
+    color: #1d4ed8;
+    box-shadow: 0 1px 3px rgba(51,112,255,.18);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  button.sort-btn:hover {
+    background: linear-gradient(180deg, #e3ecff 0%, #d0e0ff 100%);
+    border-color: #3370ff; color: #1743b8;
+    box-shadow: 0 2px 7px rgba(51,112,255,.3);
+  }
+  button.sort-btn .sort-ico {
+    font-size: 14px; font-weight: 900; line-height: 1;
+  }
+  /* 分数排序：实心蓝，最突出 */
+  button.sort-btn-primary {
+    background: linear-gradient(180deg, #3370ff 0%, #245bdb 100%);
+    border-color: #245bdb; color: #fff;
+    box-shadow: 0 2px 8px rgba(51,112,255,.4);
+  }
+  button.sort-btn-primary:hover {
+    background: linear-gradient(180deg, #245bdb 0%, #1c47b0 100%);
+    border-color: #1c47b0; color: #fff;
+    box-shadow: 0 3px 12px rgba(51,112,255,.5);
+  }
+
   .btnrow { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
   .btnrow + .btnrow { margin-top: 8px; }
   .btnrow .sep { width: 1px; height: 20px; background: #e5e6eb; margin: 0 3px; }
@@ -475,8 +505,12 @@
       <button onclick="addJudge()" title="增加评委（Ctrl+J / Alt+J）">＋ 增加评委</button>
       <button onclick="delJudge()" title="减少评委（Alt+K）">－ 减少评委</button>
       <span class="sep"></span>
-      <button onclick="sortByNo()" title="按序号排序（Alt+S）">序号排序</button>
-      <button onclick="sortByScore()" title="按分数排序（Alt+P）">分数排序</button>
+      <button class="sort-btn" onclick="sortByNo()" title="按序号从小到大排序（Alt+S）">
+        <span class="sort-ico">⇅</span>序号排序
+      </button>
+      <button class="sort-btn sort-btn-primary" onclick="sortByScore()" title="按最终成绩从高到低排序（Alt+P）">
+        <span class="sort-ico">▼</span>分数排序
+      </button>
       <span class="sep"></span>
       <button id="btnUndo" onclick="undo()" disabled title="撤销  Ctrl+Z">↶ 撤销</button>
       <button id="btnRedo" onclick="redo()" disabled title="重做  Ctrl+Y">↷ 重做</button>
@@ -1017,8 +1051,12 @@ function calcRow(row) {
   const avg = sum / useVals.length;
 
   // 分数修正（加减分），默认 0
-  const adj = parseFloat(row.adjust);
-  const adjust = isNaN(adj) ? 0 : adj;
+  // 未勾选「分数修正 / 最终成绩」时，修正不生效，最终成绩 = 平均分
+  let adjust = 0;
+  if (state.showAdjust) {
+    const adj = parseFloat(row.adjust);
+    adjust = isNaN(adj) ? 0 : adj;
+  }
 
   // 最终成绩 = 平均分 + 分数修正
   const final = (avg === null) ? null : (avg + adjust);
@@ -1079,8 +1117,11 @@ function renderHead() {
     html += `<th class="score-col" style="width:74px"><div class="th-inner">评委${i + 1}</div></th>`;
   }
 
-  // 平均分
-  html += `<th style="width:80px"><div class="th-inner">平均分</div></th>`;
+  // 平均分 / 最终成绩
+  // 勾选「分数修正」时显示「平均分」（后面还有最终成绩列）
+  // 不勾选时这一列就是最终结果，标题显示「最终成绩」
+  const avgTitle = state.showAdjust ? '平均分' : '最终成绩';
+  html += `<th style="width:${state.showAdjust ? 80 : 88}px"><div class="th-inner">${avgTitle}</div></th>`;
 
   // 分数修正 / 最终成绩（勾选时才显示）
   if (state.showAdjust) {
@@ -2402,11 +2443,11 @@ function sortByNo() {
 }
 
 function sortByScore() {
-  // 开了「分数修正」时按最终成绩排，否则按平均分排
-  const useFinal = !!state.showAdjust;
+  // 始终按「最终成绩」排序（= 平均分 + 分数修正）
+  // 未勾选分数修正时修正恒为 0，最终成绩就等于平均分，行为一致
   const keyOf = r => {
     const st = calcRow(r);
-    return useFinal ? st.final : st.avg;
+    return st.final;
   };
 
   const scored = state.rows.filter(r => keyOf(r) !== null && keyOf(r) !== undefined);
@@ -2419,9 +2460,9 @@ function sortByScore() {
 
   save();
   renderBody();
-  toast(useFinal
-    ? `已按最终成绩从高到低排序（含分数修正）`
-    : '已按平均分从高到低排序');
+  toast(state.showAdjust
+    ? '已按最终成绩从高到低排序（含分数修正）'
+    : '已按最终成绩从高到低排序');
 }
 
 /* ---------------- 清空 ---------------- */
@@ -3194,7 +3235,14 @@ function buildExportColumns() {
       cols.push({ key: 'score' + i, label: '评委' + (i + 1), width: 74, scoreIdx: i });
     }
   }
-  if (ec.avg) cols.push({ key: 'avg', label: '平均分', width: 88 });
+  // 平均分列：不勾选分数修正时，它就是最终结果，标题显示「最终成绩」
+  if (ec.avg) {
+    cols.push({
+      key: 'avg',
+      label: state.showAdjust ? '平均分' : '最终成绩',
+      width: 88
+    });
+  }
   if (state.showAdjust && ec.adjust) {
     cols.push({ key: 'adjust', label: '分数修正', width: 82 });
   }
