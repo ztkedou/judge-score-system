@@ -456,6 +456,8 @@
       <label class="chk"><input type="checkbox" class="exp-col" data-col="unit" onchange="onExportColsChange()"> 选送单位</label>
       <label class="chk"><input type="checkbox" class="exp-col" data-col="scores" onchange="onExportColsChange()"> 评委打分</label>
       <label class="chk"><input type="checkbox" class="exp-col" data-col="avg" onchange="onExportColsChange()"> 平均分</label>
+      <label class="chk exp-adjust-only"><input type="checkbox" class="exp-col" data-col="adjust" onchange="onExportColsChange()"> 分数修正</label>
+      <label class="chk exp-adjust-only"><input type="checkbox" class="exp-col" data-col="final" onchange="onExportColsChange()"> 最终成绩</label>
       <label class="chk"><input type="checkbox" class="exp-col" data-col="rank" onchange="onExportColsChange()"> 名次</label>
     </div>
 
@@ -528,9 +530,9 @@ let state = {
   awards: { first: 0, second: 0, third: 0 },
   textOrder: ['name', 'actor', 'unit'],   // 节目名称 / 表演团队 / 选送单位
   title: '',             // 活动题目（空则用默认标题）
-  exportCols: {          // 导出/打印时包含哪些列（默认勾选：序号/节目名称/表演团队/平均分/名次）
+  exportCols: {          // 导出/打印时包含哪些列
     no: true, name: true, actor: true, unit: false,
-    scores: false, avg: true, rank: true
+    scores: false, avg: true, adjust: true, final: true, rank: true
   },
   rows: []               // { id, no, name, actor, unit, scores: [raw...] }
 };
@@ -1566,6 +1568,7 @@ function onHideScoresChange() {
 function onShowAdjustChange() {
   state.showAdjust = document.getElementById('chkShowAdjust').checked;
   save();
+  syncExportColsUI();     // 同步导出勾选区（隐藏/显示这两项）
   renderHead();
   renderBody();
   toast(state.showAdjust
@@ -2123,7 +2126,7 @@ function resetSettings() {
   state.title = '';
   state.exportCols = {
     no: true, name: true, actor: true, unit: false,
-    scores: false, avg: true, rank: true
+    scores: false, avg: true, adjust: true, final: true, rank: true
   };
 
   // ---- 3. 重建行：以预置节目单为准，尽量保留分数 ----
@@ -2272,9 +2275,9 @@ function applyPrintCols() {
     } else if (idx === avgIdx) {
       show = !!ec.avg;
     } else if (idx === adjIdx && state.showAdjust) {
-      show = !!ec.avg;      // 跟着平均分一起显示/隐藏
+      show = !!ec.adjust;
     } else if (idx === finalIdx && state.showAdjust) {
-      show = !!ec.avg;
+      show = !!ec.final;
     } else if (idx === rankIdx) {
       show = !!ec.rank;
     }
@@ -2327,7 +2330,12 @@ function syncExportColsUI() {
     const k = b.dataset.col;
     b.checked = state.exportCols && state.exportCols[k] !== undefined
       ? !!state.exportCols[k]
-      : (k === 'no' || k === 'name' || k === 'actor' || k === 'avg' || k === 'rank');
+      : (k === 'no' || k === 'name' || k === 'actor' || k === 'avg' || k === 'adjust' || k === 'final' || k === 'rank');
+  });
+
+  // 「分数修正 / 最终成绩」只在开启分数修正时才有意义
+  document.querySelectorAll('.exp-adjust-only').forEach(el => {
+    el.style.display = state.showAdjust ? '' : 'none';
   });
 }
 
@@ -2350,13 +2358,11 @@ function buildExportColumns() {
       cols.push({ key: 'score' + i, label: '评委' + (i + 1), width: 74, scoreIdx: i });
     }
   }
-  // 勾选了「分数修正」时：平均分 → 分数修正 → 最终成绩
-  if (ec.avg) {
-    cols.push({ key: 'avg', label: '平均分', width: 88 });
-    if (state.showAdjust) {
-      cols.push({ key: 'adjust', label: '分数修正', width: 82 });
-      cols.push({ key: 'final', label: '最终成绩', width: 88 });
-    }
+  // 平均分 / 分数修正 / 最终成绩：各自独立勾选
+  if (ec.avg) cols.push({ key: 'avg', label: '平均分', width: 88 });
+  if (state.showAdjust) {
+    if (ec.adjust) cols.push({ key: 'adjust', label: '分数修正', width: 82 });
+    if (ec.final) cols.push({ key: 'final', label: '最终成绩', width: 88 });
   }
   if (ec.rank) cols.push({ key: 'rank', label: '名次', width: 82 });
   return cols;
