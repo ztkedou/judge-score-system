@@ -254,12 +254,12 @@
   td input.cell::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
   /* 分数格：最高/最低高亮 */
-  /* 多选高亮（优先于最高/最低） */
-  tbody td.score.selected {
+  /* 多选高亮（文本列和评委分都适用） */
+  tbody td.selected {
     background: #dbeafe !important;
     box-shadow: inset 0 0 0 2px #3370ff !important;
   }
-  tbody td.score.selected input { color: #1d4ed8; font-weight: 600; }
+  tbody td.selected input { color: #1d4ed8; font-weight: 600; }
 
   td.score.highest { background: #fff1f0; box-shadow: inset 0 0 0 2px #f54a45; }
   td.score.highest input { color: #c92a2a; font-weight: 700; }
@@ -282,14 +282,54 @@
     font-weight: 700; font-size: 15px; background: #f7f9ff;
     font-variant-numeric: tabular-nums; min-width: 80px;
   }
+  /* ============ 奖项徽章（黑白打印也能区分）============
+     不只靠颜色，用「边框 + 字重 + 字体样式」三重区分：
+     第1名：实心深底 + 白色文字 + 2px 黑框（最重）
+     第2名：白底 + 粗体 + 1.5px 实线框
+     第3名：白底 + 斜体 + 1px 虚线框（最轻）           */
   .rank-tag {
-    display: inline-block; padding: 2px 7px; border-radius: 4px;
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
     font-size: 12px; font-weight: 600; line-height: 1.5;
+    border: 1.5px solid transparent;
   }
-  .rank-tag.g1 { background: #fff3d6; color: #a8701a; }
-  .rank-tag.g2 { background: #eef1f6; color: #5a6474; }
-  .rank-tag.g3 { background: #fbe9e2; color: #a45a2f; }
-  .rank-tag.plain { background: transparent; color: #646a73; font-weight: 400; }
+  /* 第1名：黑底白字 + 粗黑框 */
+  .rank-tag.g1 {
+    background: #1f2329; color: #fff;
+    border: 2px solid #000; font-weight: 800;
+    letter-spacing: .5px;
+  }
+  /* 第2名：白底 + 粗体 + 实线框 */
+  .rank-tag.g2 {
+    background: #fff; color: #1f2329;
+    border: 1.5px solid #1f2329; font-weight: 700;
+  }
+  /* 第3名：白底 + 斜体 + 虚线框 */
+  .rank-tag.g3 {
+    background: #fff; color: #1f2329;
+    border: 1px dashed #1f2329; font-weight: 500;
+    font-style: italic;
+  }
+  .rank-tag.plain { background: transparent; color: #646a73; font-weight: 400; border: none; }
+
+  /* 打印时强制保留边框和字重（黑白打印机也能区分） */
+  @media print {
+    .rank-tag.g1 {
+      background: #000 !important; color: #fff !important;
+      border: 2px solid #000 !important; font-weight: 800 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .rank-tag.g2 {
+      background: #fff !important; color: #000 !important;
+      border: 1.5px solid #000 !important; font-weight: 700 !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    .rank-tag.g3 {
+      background: #fff !important; color: #000 !important;
+      border: 1px dashed #000 !important; font-weight: 500 !important;
+      font-style: italic !important;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+  }
 
   /* 隐藏评委分 */
   body.hide-scores td.score { display: none; }
@@ -475,9 +515,9 @@
 
     <div class="btnrow">
       <span class="lbl">奖项名额</span>
-      <span class="field">第1名 <input type="number" id="aw1" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
-      <span class="field">第2名 <input type="number" id="aw2" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
-      <span class="field">第3名 <input type="number" id="aw3" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第一名 <input type="number" id="aw1" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第二名 <input type="number" id="aw2" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第三名 <input type="number" id="aw3" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
       <span style="font-size:12px;color:#8f959e">（都填 0 = 不设奖项，直接按分数排名）</span>
     </div>
 
@@ -1457,6 +1497,12 @@ function makeInputTd(type, value, onChange, cls, tabIdx, minWidth) {
   if (type === 'number') inp.min = 1;
   inp.oninput = () => onChange(inp.value);
   inp.onkeydown = (e) => {
+    // 方向键：在表格内移动（文本列和评委分都支持）
+    const arrow = { ArrowUp: [-1,0], ArrowDown: [1,0], ArrowLeft: [0,-1], ArrowRight: [0,1] }[e.key];
+    if (arrow) {
+      const ok = navByArrow(inp, arrow[0], arrow[1], e.shiftKey);
+      if (ok) { e.preventDefault(); return; }
+    }
     if (e.key === 'Enter') { e.preventDefault(); moveFocus(inp, 1); }
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -1464,8 +1510,32 @@ function makeInputTd(type, value, onChange, cls, tabIdx, minWidth) {
     }
   };
 
+  // 聚焦时记录光标位置
+  inp.addEventListener('focus', () => noteCursor(inp));
+
   // 单元格：右键菜单 + 智能粘贴
   bindCellClipboard(inp);
+
+  // Ctrl/Cmd + 点击：加选（文本列也支持多选）
+  inp.addEventListener('mousedown', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.stopPropagation();
+      e.preventDefault();
+      const tdEl = inp.closest('td');
+      const pos = tdToPos(tdEl);
+      if (pos) {
+        if (!document.querySelector('td.selected')) {
+          tdEl.classList.add('selected');
+        } else {
+          tdEl.classList.toggle('selected');
+        }
+        cellAnchor = pos;
+        cellCursor = pos;
+      }
+      suppressClickClear = true;
+      setTimeout(() => { suppressClickClear = false; }, 50);
+    }
+  }, true);
 
   td.appendChild(inp);
   return td;
@@ -1797,48 +1867,70 @@ function moveFocus(fromEl, dir) {
 }
 
 /* ============================================================
-   鼠标拖拽框选（在分数格区域）
+   鼠标拖拽框选（支持所有数据单元格：文本列 + 评委分）
    ============================================================ */
 let dragStart = null;
 let isDragging = false;
 let suppressClickClear = false;
 
-document.addEventListener('mousedown', (e) => {
-  const td = e.target.closest && e.target.closest('td.score');
-  if (!td) { dragStart = null; isDragging = false; return; }
-  if (e.button !== 0) return;   // 只处理左键
-  if (e.ctrlKey || e.metaKey) return;   // Ctrl+点击走加选
+/* 取某行所有「可选单元格」（序号列之后的，含文本列和评委分）
+   排除：平均分、分数修正、最终成绩、名次 */
+function selectableTds(tr) {
+  if (!tr) return [];
+  return [...tr.querySelectorAll('td')].filter(td => {
+    if (td.classList.contains('avg')) return false;
+    if (td.classList.contains('adjust')) return false;
+    if (td.classList.contains('final')) return false;
+    if (td.classList.contains('rank')) return false;
+    if (td.classList.contains('fixed-col')) return false;  // 序号列
+    return !!td.querySelector('input.cell');
+  });
+}
 
+/* 由 td 求 {row, col}，col 是「可选单元格」中的序号 */
+function tdToPos(td) {
+  if (!td) return null;
   const tr = td.closest('tr');
+  if (!tr) return null;
   const tbody = document.getElementById('tbody');
   const row = [...tbody.children].indexOf(tr);
-  const scoreTds = [...tr.querySelectorAll('td.score')];
-  const col = scoreTds.indexOf(td);
-  if (row < 0 || col < 0) return;
+  if (row < 0) return null;
+  const list = selectableTds(tr);
+  const col = list.indexOf(td);
+  if (col < 0) return null;
+  return { row, col };
+}
 
-  dragStart = { row, col };
+document.addEventListener('mousedown', (e) => {
+  const td = e.target.closest && e.target.closest('td');
+  if (!td) { dragStart = null; isDragging = false; return; }
+
+  // 只处理可选的单元格（文本列 / 评委分）
+  const pos = tdToPos(td);
+  if (!pos) { dragStart = null; isDragging = false; return; }
+
+  if (e.button !== 0) return;           // 只处理左键
+  if (e.ctrlKey || e.metaKey) return;   // Ctrl+点击走加选
+
+  dragStart = pos;
   isDragging = false;
   clearCellSelection();
-  cellAnchor = { row, col };
+  cellAnchor = pos;
 }, true);
 
 document.addEventListener('mousemove', (e) => {
   if (!dragStart) return;
-  const td = e.target.closest && e.target.closest('td.score');
+  const td = e.target.closest && e.target.closest('td');
   if (!td) return;
 
-  const tr = td.closest('tr');
-  const tbody = document.getElementById('tbody');
-  const row = [...tbody.children].indexOf(tr);
-  const scoreTds = [...tr.querySelectorAll('td.score')];
-  const col = scoreTds.indexOf(td);
-  if (row < 0 || col < 0) return;
+  const pos = tdToPos(td);
+  if (!pos) return;
 
   // 移动超过一格才算拖拽
-  if (row !== dragStart.row || col !== dragStart.col) {
+  if (pos.row !== dragStart.row || pos.col !== dragStart.col) {
     isDragging = true;
-    applyRectSelection(dragStart, { row, col });
-    cellCursor = { row, col };
+    applyRectSelection(dragStart, pos);
+    cellCursor = pos;
   }
 }, true);
 
@@ -1859,19 +1951,16 @@ document.addEventListener('mouseup', () => {
 
 // 复制选区内容（Ctrl+C 在表格里）
 document.addEventListener('copy', (e) => {
-  const sel = document.querySelectorAll('td.score.selected');
+  const sel = document.querySelectorAll('td.selected');
   if (!sel.length) return;   // 没有表格选区，走正常复制
 
-  // 计算选区的行列范围
+  // 计算选区的行列范围（按 selectableTds 的列序）
   let r1 = 1e9, r2 = -1, c1 = 1e9, c2 = -1;
   sel.forEach(td => {
-    const inp = td.querySelector('input');
-    if (!inp) return;
-    const r = parseInt(inp.dataset.row, 10);
-    const c = parseInt(inp.dataset.col, 10);
-    if (isNaN(r) || isNaN(c)) return;
-    r1 = Math.min(r1, r); r2 = Math.max(r2, r);
-    c1 = Math.min(c1, c); c2 = Math.max(c2, c);
+    const pos = tdToPos(td);
+    if (!pos) return;
+    r1 = Math.min(r1, pos.row); r2 = Math.max(r2, pos.row);
+    c1 = Math.min(c1, pos.col); c2 = Math.max(c2, pos.col);
   });
   if (r2 < 0) return;
 
@@ -1881,10 +1970,12 @@ document.addEventListener('copy', (e) => {
   toast(`已复制 ${r2 - r1 + 1} 行 × ${c2 - c1 + 1} 列`);
 });
 
-// 点击非分数格区域清除选区
+// 点击表格外区域清除选区
 document.addEventListener('click', (e) => {
   if (suppressClickClear) return;   // 拖拽刚结束，别清
-  if (!e.target.closest || !e.target.closest('td.score')) {
+  const td = e.target.closest && e.target.closest('td');
+  const isSelectable = td && tdToPos(td);
+  if (!isSelectable) {
     if (!e.target.closest || !e.target.closest('.ctxmenu')) {
       clearCellSelection();
       cellAnchor = null;
@@ -1902,36 +1993,28 @@ let cellCursor = null;     // {row, col} 当前活动格
 function getCellInput(row, col) {
   const tr = document.querySelectorAll('#tbody tr')[row];
   if (!tr) return null;
-  // 列索引：0=序号, 1..N=文本, N+1..=评委分
-  const cells = tr.querySelectorAll('td');
-  let idx = -1;
-  if (col === 'no') idx = 0;
-  else if (typeof col === 'number' && col >= 0 && col < 10) {
-    // col 是评委序号
-    idx = 1 + state.textOrder.length + col;
-  }
-  const td = cells[idx];
+  const td = selectableTds(tr)[col];
   return td ? td.querySelector('input.cell') : null;
 }
 
 // 记录当前格坐标
 function noteCursor(inp) {
   if (!inp) return;
-  const r = parseInt(inp.dataset.row, 10);
-  const c = parseInt(inp.dataset.col, 10);
-  if (!isNaN(r) && !isNaN(c) && inp.closest('td.score')) {
-    cellCursor = { row: r, col: c };
-  }
+  const pos = tdToPos(inp.closest('td'));
+  if (pos) cellCursor = pos;
 }
 
 // 方向键导航（只在评委分数格内有效）
 function navByArrow(inp, dRow, dCol, extend) {
-  const r = parseInt(inp.dataset.row, 10);
-  const c = parseInt(inp.dataset.col, 10);
-  if (isNaN(r) || isNaN(c)) return false;
+  const pos = tdToPos(inp.closest('td'));
+  if (!pos) return false;
+  const { row: r, col: c } = pos;
 
   const nr = Math.max(0, Math.min(state.rows.length - 1, r + dRow));
-  const nc = Math.max(0, Math.min(state.judgeCount - 1, c + dCol));
+  // 列范围：该行的可选单元格数
+  const tr2 = document.querySelectorAll('#tbody tr')[nr];
+  const maxCol = tr2 ? selectableTds(tr2).length - 1 : 0;
+  const nc = Math.max(0, Math.min(maxCol, c + dCol));
 
   const target = getCellInput(nr, nc);
   if (!target) return false;
@@ -1956,7 +2039,7 @@ function navByArrow(inp, dRow, dCol, extend) {
 
 /* ---------------- 多选支持 ---------------- */
 function clearCellSelection() {
-  document.querySelectorAll('td.score.selected').forEach(td => td.classList.remove('selected'));
+  document.querySelectorAll('td.selected').forEach(td => td.classList.remove('selected'));
 }
 
 function applyRectSelection(a, b) {
@@ -1965,13 +2048,24 @@ function applyRectSelection(a, b) {
   const c1 = Math.min(a.col, b.col), c2 = Math.max(a.col, b.col);
 
   for (let r = r1; r <= r2; r++) {
+    const tr = document.querySelectorAll('#tbody tr')[r];
+    if (!tr) continue;
+    const list = selectableTds(tr);
     for (let c = c1; c <= c2; c++) {
-      const tr = document.querySelectorAll('#tbody tr')[r];
-      if (!tr) continue;
-      const td = tr.querySelectorAll('td.score')[c];
+      const td = list[c];
       if (td) td.classList.add('selected');
     }
   }
+}
+
+/* 取某格的值（文本列取文字，评委分取分数） */
+function cellValueAt(r, c) {
+  const tr = document.querySelectorAll('#tbody tr')[r];
+  if (!tr) return '';
+  const td = selectableTds(tr)[c];
+  if (!td) return '';
+  const inp = td.querySelector('input.cell');
+  return inp ? inp.value : '';
 }
 
 // 从选区收集数据（用于复制）
@@ -1980,7 +2074,7 @@ function collectSelection(r1, c1, r2, c2) {
   for (let r = r1; r <= r2; r++) {
     const line = [];
     for (let c = c1; c <= c2; c++) {
-      line.push(String(state.rows[r].scores[c] ?? ''));
+      line.push(cellValueAt(r, c));
     }
     rows.push(line);
   }
