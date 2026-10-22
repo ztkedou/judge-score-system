@@ -2298,15 +2298,26 @@ function sortByNo() {
 }
 
 function sortByScore() {
-  const withAvg = state.rows.filter(r => calcRow(r).avg !== null);
-  const noAvg = state.rows.filter(r => calcRow(r).avg === null);
-  if (!withAvg.length) { toast('还没有打过分的节目'); return; }
+  // 开了「分数修正」时按最终成绩排，否则按平均分排
+  const useFinal = !!state.showAdjust;
+  const keyOf = r => {
+    const st = calcRow(r);
+    return useFinal ? st.final : st.avg;
+  };
 
-  withAvg.sort((a, b) => calcRow(b).avg - calcRow(a).avg);
-  state.rows = [...withAvg, ...noAvg];
+  const scored = state.rows.filter(r => keyOf(r) !== null && keyOf(r) !== undefined);
+  const noScore = state.rows.filter(r => keyOf(r) === null || keyOf(r) === undefined);
+
+  if (!scored.length) { toast('还没有打过分的节目'); return; }
+
+  scored.sort((a, b) => keyOf(b) - keyOf(a));
+  state.rows = [...scored, ...noScore];
+
   save();
   renderBody();
-  toast('已按分数从高到低排序');
+  toast(useFinal
+    ? `已按最终成绩从高到低排序（含分数修正）`
+    : '已按平均分从高到低排序');
 }
 
 /* ---------------- 清空 ---------------- */
