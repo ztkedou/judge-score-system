@@ -205,8 +205,8 @@ def main():
         section("【9】恢复默认设置（分数要保留）")
         # 先把第1行名字恢复成预置名（前面持久化测试改过名）
         pg.evaluate("""() => {
-            state.rows[0].name = '《倒采茶》';
-            state.rows[0].actor = '中老年舞蹈健身协会';
+            state.rows[0].name = '《示例节目一》';
+            state.rows[0].actor = '示例演出团队一';
             state.maxScore = 100;
             state.decimals = 3;
             state.judgeCount = 7;
@@ -302,6 +302,7 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
 
 
 
