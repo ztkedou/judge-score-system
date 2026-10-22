@@ -782,24 +782,176 @@ function renderBody() {
       inp.type = 'text';
       inp.inputMode = 'numeric';
       inp.className = 'cell';
-      inp.value = row.scores[i] === undefined ? '' : row.scores[i];
+      // 显示换算后的值（如 9.86），数据里存原始输入（如 "986"）
+      const initV = parseScore(row.scores[i], state.maxScore, state.decimals);
+      inp.value = initV === null ? '' : fmtScore(initV, state.decimals);
       inp.placeholder = '';
       inp.tabIndex = 60 + ri * 100 + 10 + i;
-      inp.title = '直接输入数字，按规则自动换算';
-      inp.oninput = () => {
-        row.scores[i] = inp.value;
+      inp.title = `直接输入数字自动换算（满分 ${state.maxScore}）`;
+      inp._lastGood = inp.value;
+
+      /* ============ 核心：用 keydown 自己维护原始输入串 ============
+         为什么不用 oninput？
+         因为 oninput 拿到的 inp.value 是「已格式化的显示值 + 新敲字符」，
+         再换算就会二次换算（9.86 → 敲 855 → "9.86855" → 错）。
+         所以这里用 _raw 记录用户真正敲的原始数字串。 */
+
+      inp._raw = (row.scores[i] === undefined || row.scores[i] === null) ? '' : String(row.scores[i]);
+
+      // 把 _raw 同步到显示 + 数据
+      const commitRaw = () => {
+        const raw = inp._raw;
+
+        if (raw === '' || raw === '-' || raw === '.') {
+          if (raw === '') {
+            delete row.scores[i];
+            inp.value = '';
+            inp._lastGood = '';
+            inp.classList.remove('invalid');
+          } else {
+            inp.value = raw;
+          }
+          save();
+          refreshStats();
+          return;
+        }
+
+        const v = parseScore(raw, state.maxScore, state.decimals);
+        if (v === null) { save(); refreshStats(); return; }
+
+        // 超满分 → 按满分计
+        if (v > state.maxScore) {
+          inp.classList.add('invalid');
+          const rawFull = state.decimals === 0
+            ? String(state.maxScore)
+            : String(Math.round(state.maxScore * Math.pow(10, state.decimals)));
+          inp._raw = rawFull;
+          row.scores[i] = rawFull;
+          inp.value = fmtScore(state.maxScore, state.decimals);
+          inp._lastGood = inp.value;
+          save();
+          refreshStats();
+          toast(`不能超过满分 ${state.maxScore}，已按满分计`);
+          return;
+        }
+
+        // 负数 → 回滚
+        if (v < 0) {
+          inp.classList.add('invalid');
+          inp.value = inp._lastGood || '';
+          save();
+          refreshStats();
+          return;
+        }
+
+        // 合法
+        inp.classList.remove('invalid');
+        row.scores[i] = raw;
+        inp.value = fmtScore(v, state.decimals);
+        inp._lastGood = inp.value;
         save();
-        refreshStats();     // 只重算统计，不重建 DOM（避免丢焦点）
+        refreshStats();
       };
-      inp.onkeydown = (e) => {
-        if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+
+      // 键盘输入：自己累积原始串
+      inp.addEventListener('keydown', (e) => {
+        // Enter / Tab：移动焦点
+        if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault();
           moveFocus(inp, e.shiftKey ? -1 : 1);
+          return;
         }
-        if (e.key === 'Tab' && e.shiftKey) {
+
+        // 功能键放行
+        if (e.key === 'Escape' || e.ctrlKey || e.metaKey || e.altKey ||
+            e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
+            e.key === 'Home' || e.key === 'End') {
+          return;
+        }
+
+        // 退格：删掉原始串最后一位（刚聚焦时直接清空）
+        if (e.key === 'Backspace') {
           e.preventDefault();
-          moveFocus(inp, -1);
+          if (inp._freshInput) {
+            inp._raw = '';
+            inp._freshInput = false;
+          } else {
+            inp._raw = inp._raw.slice(0, -1);
+          }
+          commitRaw();
+          return;
         }
+
+        // 删除：清空
+        if (e.key === 'Delete') {
+          e.preventDefault();
+          inp._raw = '';
+          commitRaw();
+          return;
+        }
+
+        // 数字 0-9
+        if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          // 聚焦后第一次按键：清空重来
+          if (inp._freshInput) {
+            inp._raw = '';
+            inp._freshInput = false;
+          }
+          inp._raw += e.key;
+          commitRaw();
+          return;
+        }
+
+        // 小数点（用户想直接输小数）
+        if (e.key === '.') {
+          e.preventDefault();
+          if (inp._freshInput) {
+            inp._raw = '';
+            inp._freshInput = false;
+          }
+          if (!inp._raw.includes('.')) {
+            inp._raw += '.';
+            inp.value = inp._raw;
+          }
+          return;
+        }
+
+        // 其他字符一律忽略
+        if (e.key.length === 1) {
+          e.preventDefault();
+        }
+      });
+
+      // 粘贴：只取数字
+      inp.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const t = (e.clipboardData || window.clipboardData).getData('text/plain') || '';
+        const digits = t.replace(/[^\d.]/g, '');
+        if (!digits) return;
+        inp._raw = digits;
+        commitRaw();
+      });
+
+      // 聚焦：全选；并标记「下一次输入是全新开始」
+      inp.onfocus = () => {
+        inp._freshInput = true;
+        inp.select();
+      };
+
+      // 点击时：如果已经聚焦（onfocus 不再触发），也重置为全新输入
+      inp.addEventListener('mousedown', () => {
+        if (document.activeElement === inp) {
+          inp._freshInput = true;
+          setTimeout(() => inp.select(), 0);
+        }
+      });
+
+      // 失焦：规范化显示
+      inp.onblur = () => {
+        const v = parseScore(row.scores[i], state.maxScore, state.decimals);
+        inp.value = (v === null) ? '' : fmtScore(v, state.decimals);
+        inp._lastGood = inp.value;
       };
       td.appendChild(inp);
       tr.appendChild(td);
@@ -2745,4 +2897,3 @@ function esc(s) {
 </script>
 </body>
 </html>
-
