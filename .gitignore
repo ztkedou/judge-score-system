@@ -1,0 +1,9 @@
+# 临时文件
+*.tmp
+*.bak
+~$*
+Thumbs.db
+desktop.ini
+
+# 系统
+.DS_Store

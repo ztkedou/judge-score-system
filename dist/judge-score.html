@@ -1,0 +1,2188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>评委打分统计系统</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    background: #eef0f4; color: #1f2329; font-size: 14px;
+  }
+
+  /* ============ 顶部标题 ============ */
+  .topbar {
+    background: #1f2329; color: #fff; padding: 10px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+  .topbar .sub { font-size: 12px; opacity: .6; margin-left: 10px; font-weight: 400; }
+
+  .wrap { padding: 12px; }
+
+  /* ============ 活动标题栏（表格正上方）============ */
+  .titlebar {
+    background: #fff; border-radius: 8px 8px 0 0; padding: 14px 18px 12px;
+    box-shadow: 0 -1px 3px rgba(0,0,0,.04), 0 1px 0 #eef0f4;
+    margin-bottom: 0; text-align: center; border-bottom: 1px solid #e5e6eb;
+  }
+  .title-text {
+    font-size: 22px; font-weight: 700; color: #1f2329;
+    letter-spacing: 2px; line-height: 1.4; cursor: text;
+    padding: 4px 10px; border-radius: 5px; display: inline-block;
+    min-width: 120px; transition: background .15s;
+  }
+  .title-text:hover { background: #f5f6f8; }
+  .title-input {
+    font-size: 22px; font-weight: 700; color: #1f2329;
+    letter-spacing: 2px; text-align: center; font-family: inherit;
+    border: none; border-bottom: 2px solid #3370ff; outline: none;
+    background: #f8faff; padding: 4px 10px; border-radius: 5px 5px 0 0;
+    width: 60%; min-width: 200px; max-width: 560px;
+  }
+
+  /* ============ 通用面板 ============ */
+  .panel {
+    background: #fff; border-radius: 8px; padding: 10px 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.07); margin-bottom: 10px;
+  }
+  .panel-title {
+    font-size: 12px; color: #8f959e; font-weight: 600;
+    margin: 0 0 8px; letter-spacing: .5px;
+  }
+
+  /* ============ 按钮 ============ */
+  button {
+    font-family: inherit; font-size: 13px; cursor: pointer;
+    border: 1px solid #d9dde3; border-radius: 5px; padding: 6px 13px;
+    background: #fff; color: #1f2329; transition: all .13s;
+    white-space: nowrap; line-height: 1.4;
+  }
+  button:hover { border-color: #3370ff; color: #3370ff; }
+  button:active { transform: scale(.97); }
+  button.on {
+    background: #3370ff; border-color: #3370ff; color: #fff;
+  }
+  button.on:hover { color: #fff; }
+  button.primary { background: #3370ff; border-color: #3370ff; color: #fff; }
+  button.primary:hover { background: #245bdb; border-color: #245bdb; color: #fff; }
+  button.danger { color: #f54a45; }
+  button.danger:hover { border-color: #f54a45; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button:disabled:hover { border-color: #d9dde3; color: #1f2329; }
+
+  .btnrow { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+  .btnrow + .btnrow { margin-top: 8px; }
+  .btnrow .sep { width: 1px; height: 20px; background: #e5e6eb; margin: 0 3px; }
+  .btnrow .lbl { font-size: 12px; color: #646a73; margin-right: 2px; }
+
+  /* 现场抽签顺序：高亮行 */
+  .highlight-row {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #f0f6ff; border: 1px solid #c9ddff; border-radius: 6px;
+    padding: 9px 13px; margin-bottom: 12px;
+  }
+  .chk-strong { font-weight: 600; font-size: 14px; color: #1f2329; padding: 0; }
+  .chk-strong:hover { background: transparent; }
+  .highlight-hint { font-size: 12px; color: #5b7ca8; }
+  .highlight-row.active { background: #e6f0ff; border-color: #3370ff; }
+
+  /* ============ 规则区输入 ============ */
+  .field {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 13px; color: #646a73;
+  }
+  .field input[type=number] {
+    width: 46px; border: 1px solid #d9dde3; border-radius: 4px;
+    padding: 5px 6px; font-family: inherit; font-size: 13px;
+    text-align: center; -moz-appearance: textfield;
+  }
+  .field input[type=number]::-webkit-outer-spin-button,
+  .field input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .field input[type=number]:focus { outline: none; border-color: #3370ff; }
+
+  .chk {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 13px; color: #1f2329; cursor: pointer; user-select: none;
+    padding: 4px 8px; border-radius: 4px;
+  }
+  .chk:hover { background: #f5f6f8; }
+  .chk input { width: 15px; height: 15px; cursor: pointer; margin: 0; }
+
+  /* ============ 表格 ============ */
+  .tablewrap {
+    background: #fff; border-radius: 8px; overflow: auto;
+    box-shadow: 0 1px 3px rgba(0,0,0,.07); margin-bottom: 10px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #f7f8fa; font-weight: 600; color: #1f2329;
+    padding: 0; border: 1px solid #e5e6eb; position: sticky; top: 0; z-index: 3;
+    white-space: nowrap;
+  }
+  thead th .th-inner {
+    padding: 8px 6px; display: flex; align-items: center;
+    justify-content: center; gap: 3px; min-height: 36px;
+  }
+  thead th .caret {
+    font-size: 9px; color: #8f959e; cursor: pointer; padding: 2px 1px;
+    border-radius: 3px; line-height: 1;
+  }
+  /* 可切换的列：整格可点 */
+  thead th.switchable { cursor: pointer; user-select: none; }
+  thead th.switchable:hover { background: #eef4ff; }
+  thead th.switchable:hover .caret { background: #3370ff; color: #fff; }
+  thead th.switchable .th-inner::after { content: ''; }
+
+  tbody td {
+    border: 1px solid #e5e6eb; padding: 0; text-align: center;
+    vertical-align: middle; height: 36px;
+  }
+  tbody tr:hover td { background: #fafbfc; }
+
+  /* 序号列：固定列，视觉上区分 */
+  thead th.fixed-col { background: #eef0f4; color: #646a73; }
+  tbody td.fixed-col { background: #fafbfc; }
+  tbody td.fixed-col input.cell { color: #646a73; font-weight: 600; }
+  tbody tr:hover td.fixed-col { background: #f5f6f8; }
+
+  /* 单元格输入 */
+  td input.cell {
+    width: 100%; height: 100%; min-height: 34px;
+    border: none; outline: none; background: transparent;
+    font-family: inherit; font-size: 13px; color: #1f2329;
+    text-align: center; padding: 4px 5px;
+  }
+  td input.cell:focus { background: #f0f5ff; box-shadow: inset 0 0 0 2px #3370ff; }
+  td input.cell.text { text-align: left; }
+  td input.cell.no { font-weight: 600; color: #646a73; }
+  td input.cell::-webkit-outer-spin-button,
+  td input.cell::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+  /* 分数格：最高/最低高亮 */
+  td.score.highest { background: #fff1f0; box-shadow: inset 0 0 0 2px #f54a45; }
+  td.score.highest input { color: #c92a2a; font-weight: 700; }
+  td.score.lowest  { background: #e8f7ff; box-shadow: inset 0 0 0 2px #1a7fd4; }
+  td.score.lowest input { color: #0b5fa5; font-weight: 700; }
+  td.score.invalid { background: #fff6f6; box-shadow: inset 0 0 0 2px #ffa39e; }
+
+  /* 平均分/名次 */
+  td.avg {
+    font-weight: 700; font-size: 15px; color: #3370ff;
+    font-variant-numeric: tabular-nums; background: #f7f9ff;
+    min-width: 66px;
+  }
+  td.rank { font-weight: 600; min-width: 62px; }
+  .rank-tag {
+    display: inline-block; padding: 2px 7px; border-radius: 4px;
+    font-size: 12px; font-weight: 600; line-height: 1.5;
+  }
+  .rank-tag.g1 { background: #fff3d6; color: #a8701a; }
+  .rank-tag.g2 { background: #eef1f6; color: #5a6474; }
+  .rank-tag.g3 { background: #fbe9e2; color: #a45a2f; }
+  .rank-tag.plain { background: transparent; color: #646a73; font-weight: 400; }
+
+  /* 隐藏评委分 */
+  body.hide-scores td.score { display: none; }
+  body.hide-scores th.score-col { display: none; }
+
+  .title-import {
+    flex: 1; min-width: 240px; border: 1px solid #d9dde3; border-radius: 5px;
+    padding: 8px 11px; font-family: inherit; font-size: 14px; color: #1f2329;
+  }
+  .title-import:focus { outline: none; border-color: #3370ff; box-shadow: 0 0 0 2px rgba(51,112,255,.1); }
+
+  /* ============ 导入区 ============ */
+  textarea {
+    width: 100%; min-height: 88px; border: 1px solid #d9dde3;
+    border-radius: 6px; padding: 9px 11px; font-family: inherit;
+    font-size: 13px; resize: vertical; line-height: 1.65;
+    color: #1f2329;
+  }
+  textarea:focus { outline: none; border-color: #3370ff; box-shadow: 0 0 0 2px rgba(51,112,255,.1); }
+  .import-hint {
+    font-size: 12px; color: #8f959e; margin-top: 7px; line-height: 1.7;
+  }
+  .import-hint b { color: #646a73; }
+
+  /* ============ 提示 ============ */
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(16px);
+    background: #1f2329; color: #fff; padding: 9px 18px; border-radius: 7px;
+    font-size: 13px; opacity: 0; pointer-events: none; transition: all .22s;
+    z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,.22); max-width: 80vw;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* 列头下拉菜单 */
+  .colmenu {
+    position: fixed; background: #fff; border-radius: 6px; z-index: 9998;
+    box-shadow: 0 4px 20px rgba(0,0,0,.16); padding: 4px; display: none;
+    min-width: 120px;
+  }
+  .colmenu.show { display: block; }
+  .colmenu .item {
+    padding: 7px 12px; font-size: 13px; cursor: pointer; border-radius: 4px;
+    display: flex; align-items: center; gap: 7px; white-space: nowrap;
+  }
+  .colmenu .item:hover { background: #f0f5ff; color: #3370ff; }
+  .colmenu .item.sel { color: #3370ff; font-weight: 600; }
+  .colmenu .item .dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #3370ff;
+    opacity: 0; flex-shrink: 0;
+  }
+  .colmenu .item.sel .dot { opacity: 1; }
+
+  /* 右键菜单 */
+  .ctxmenu {
+    position: fixed; background: #fff; border-radius: 6px; z-index: 9999;
+    box-shadow: 0 4px 20px rgba(0,0,0,.18); padding: 4px; display: none;
+    min-width: 150px; border: 1px solid #e5e6eb;
+  }
+  .ctxmenu.show { display: block; }
+  .ctxmenu .item {
+    padding: 8px 12px; font-size: 13px; cursor: pointer; border-radius: 4px;
+    display: flex; align-items: center; gap: 8px; white-space: nowrap; color: #1f2329;
+  }
+  .ctxmenu .item:hover { background: #f0f5ff; color: #3370ff; }
+  .ctxmenu .item .ico { font-size: 13px; width: 15px; text-align: center; }
+  .ctxmenu .item.danger:hover { background: #fff1f0; color: #f54a45; }
+  .ctxmenu .item.disabled { color: #c0c4cc; cursor: default; }
+  .ctxmenu .item.disabled:hover { background: transparent; color: #c0c4cc; }
+  .ctxmenu .sep { height: 1px; background: #eff0f1; margin: 4px 6px; }
+
+  /* 行右键高亮 */
+  tbody tr.ctx-active td { background: #eef4ff !important; }
+
+  /* 空状态 */
+  .empty {
+    text-align: center; padding: 34px 16px; color: #8f959e;
+    font-size: 13px; background: #fff; border-radius: 8px;
+  }
+
+  /* 打印 */
+  @media print {
+    body { background: #fff; }
+    .topbar, .panel, .no-print, .toast { display: none !important; }
+    .wrap { padding: 0; }
+    /* 活动标题栏要打印出来 */
+    .titlebar {
+      display: block !important; box-shadow: none; border-bottom: 1px solid #ccc;
+      padding: 10px 0 8px; margin-bottom: 6px;
+    }
+    .title-text { font-size: 20px; }
+    .tablewrap { box-shadow: none; overflow: visible; }
+    thead th { position: static; }
+    tbody td input.cell { box-shadow: none !important; }
+    td.score.highest { background: #fff1f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td.score.lowest  { background: #e8f7ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    td.avg { background: #f7f9ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .rank-tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  @media (max-width: 900px) {
+    .wrap { padding: 8px; }
+    .panel { padding: 8px 10px; }
+    button { padding: 5px 10px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>评委打分统计系统 <span class="sub">完全离线 · 数据存本机</span></h1>
+</div>
+
+<div class="wrap">
+
+  <!-- ================= 第一栏：功能区 ================= -->
+  <div class="panel">
+    <div class="btnrow">
+      <button onclick="addRow()">＋ 增加一行</button>
+      <button onclick="delRow()">－ 减少一行</button>
+      <span class="sep"></span>
+      <button onclick="addJudge()">＋ 增加评委</button>
+      <button onclick="delJudge()">－ 减少评委</button>
+      <span class="sep"></span>
+      <button onclick="sortByNo()">序号排序</button>
+      <button onclick="sortByScore()">分数排序</button>
+      <span class="sep"></span>
+      <button class="danger" onclick="clearAll()">清空全部</button>
+    </div>
+  </div>
+
+  <!-- ================= 第二栏：规则设定 ================= -->
+  <div class="panel">
+    <div class="panel-title">规则设定</div>
+
+    <!-- 现场抽签顺序：放在最显眼的位置 -->
+    <div class="highlight-row">
+      <label class="chk chk-strong">
+        <input type="checkbox" id="chkDrawOrder" onchange="onDrawOrderChange()">
+        现场抽签顺序
+      </label>
+      <span class="highlight-hint">勾选后：导入只填节目，序号留空由你手填；填完点「按序号排序」自动排好</span>
+    </div>
+
+    <div class="btnrow">
+      <span class="lbl">满分</span>
+      <button id="btnMax10"  onclick="setMax(10)">10 分</button>
+      <button id="btnMax100" onclick="setMax(100)">100 分</button>
+      <span class="sep"></span>
+      <span class="lbl">小数位</span>
+      <button id="btnDec0" onclick="setDecimals(0)">整数</button>
+      <button id="btnDec2" onclick="setDecimals(2)">两位</button>
+      <button id="btnDec3" onclick="setDecimals(3)">三位</button>
+    </div>
+
+    <div class="btnrow">
+      <span class="lbl">奖项名额</span>
+      <span class="field">第一名 <input type="number" id="aw1" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第二名 <input type="number" id="aw2" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第三名 <input type="number" id="aw3" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span style="font-size:12px;color:#8f959e">（都填 0 = 不设奖项，直接按分数排名）</span>
+    </div>
+
+    <div class="btnrow">
+      <label class="chk"><input type="checkbox" id="chkDropHighLow" onchange="onRuleChange()"> 去掉一个最高分和一个最低分</label>
+      <label class="chk"><input type="checkbox" id="chkHasUnit" onchange="onHasUnitChange()"> 有选送单位</label>
+      <label class="chk"><input type="checkbox" id="chkHideScores" onchange="onHideScoresChange()"> 隐藏评委打分</label>
+    </div>
+  </div>
+
+  <!-- ================= 第三栏：打分表格 ================= -->
+  <!-- 活动标题栏（在表格正上方，属于表格区域） -->
+  <div class="titlebar" id="titleBar">
+    <div class="title-text" id="titleText" onclick="focusTitleInput()" title="点击修改活动题目">评分表</div>
+  </div>
+
+  <div class="tablewrap" id="tableWrap">
+    <table id="mainTable">
+      <thead><tr id="theadRow"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty" id="emptyTip" style="display:none">
+    还没有节目 —— 在下面粘贴名单导入，或点上方「增加一行」
+  </div>
+
+  <!-- ================= 导入区 ================= -->
+  <div class="panel no-print">
+    <div class="panel-title">活动题目</div>
+    <div class="btnrow">
+      <input type="text" id="titleInput" class="title-import" placeholder="输入活动题目，例如：2026 年迎新春文艺汇演评分表" oninput="onTitleInput()">
+      <button onclick="resetTitle()">恢复默认</button>
+    </div>
+    <div class="import-hint">
+      这里输入的内容会显示在表格正上方的标题栏，并随 Excel / 图片 / 打印一起导出。
+    </div>
+  </div>
+
+  <div class="panel no-print">
+    <div class="panel-title">导入节目名单</div>
+    <textarea id="importBox" placeholder="从 Excel / Word 表格直接复制粘贴到这里即可。
+
+每行一个节目，列的顺序：序号(可省) 节目名称 演出人员 选送单位
+例：
+1	合唱《歌唱祖国》	三年二班	音乐组
+2	舞蹈《青春》	李小萌等8人	舞蹈组"></textarea>
+    <div class="btnrow" style="margin-top:8px">
+      <button class="primary" onclick="doImport()">导入到表格</button>
+      <button onclick="document.getElementById('importBox').value=''">清空输入框</button>
+      <span id="importCount" style="font-size:12px;color:#8f959e">等待粘贴…</span>
+    </div>
+    <div class="import-hint">
+      兼容分隔符：<b>制表符</b>（Excel/Word 复制默认）、<b>逗号</b>、<b>中文逗号</b>、<b>顿号</b>、<b>竖线</b>、<b>分号</b>、<b>两个以上连续空格</b>。<br>
+      首列如果全是纯数字，会自动识别为「序号」并跳过。
+    </div>
+  </div>
+
+  <!-- ================= 底部：导出 ================= -->
+  <div class="panel no-print">
+    <div class="panel-title">导出结果</div>
+    <div class="btnrow">
+      <button class="primary" onclick="exportExcel()">导出 Excel</button>
+      <button onclick="exportImage()">导出图片</button>
+      <button onclick="window.print()">打印结果</button>
+    </div>
+  </div>
+
+  <!-- ================= 比赛设置：存档/读取 ================= -->
+  <div class="panel no-print">
+    <div class="panel-title">比赛设置存档</div>
+    <div class="btnrow">
+      <button class="primary" onclick="exportSetup()">导出比赛设置</button>
+      <button onclick="document.getElementById('setupFile').click()">导入比赛设置</button>
+      <input type="file" id="setupFile" accept=".json,.jsonl,.txt" style="display:none" onchange="importSetup(this)">
+      <span class="hint" style="font-size:12px;color:#8f959e">
+        把节目单、评分规则、标题全部打包成文件。下次导入即可直接开始打分。
+      </span>
+    </div>
+    <div class="import-hint">
+      <b>用途</b>：赛前把节目单和规则配置好 → 导出设置文件 → 现场打开网页导入该文件 → 只需输入分数。<br>
+      文件格式为 <b>.json</b>，可用记事本打开查看，不要手动改内容。
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="colmenu" id="colMenu"></div>
+<div class="ctxmenu" id="ctxMenu">
+  <div class="item" onclick="ctxInsertRow('above')">
+    <span class="ico">⬆</span>在上方插入一行
+  </div>
+  <div class="item" onclick="ctxInsertRow('below')">
+    <span class="ico">⬇</span>在下方插入一行
+  </div>
+  <div class="sep"></div>
+  <div class="item danger" onclick="ctxDeleteRow()">
+    <span class="ico">🗑</span>删除这一行
+  </div>
+</div>
+
+<div class="ctxmenu" id="cellMenu"></div>
+
+<script>
+/* ============================================================
+   评委打分统计系统 —— 单文件离线版 v2
+   ============================================================ */
+
+const STORE_KEY = 'judge_score_v2';
+
+// 文本列定义（可互换）
+const TEXT_COLS = {
+  name:  { key: 'name',  label: '节目名称' },
+  actor: { key: 'actor', label: '演出人员' },
+  unit:  { key: 'unit',  label: '选送单位' }
+};
+
+let state = {
+  maxScore: 10,          // 10 | 100
+  decimals: 2,           // 0 | 2 | 3
+  judgeCount: 5,         // 评委数量
+  hasUnit: false,        // 是否有选送单位
+  hideScores: false,     // 隐藏评委打分
+  dropHighLow: false,    // 去掉最高最低
+  drawOrder: false,      // 现场抽签顺序（导入不自动填序号）
+  awards: { first: 0, second: 0, third: 0 },
+  textOrder: ['name', 'actor'],   // 文本列顺序（有单位时为3个）
+  title: '',             // 活动题目（空则显示默认"评分表"）
+  rows: []               // { id, no, name, actor, unit, scores: [raw...] }
+};
+
+let lastColMenuTarget = null;
+
+/* ---------------- 存取 ---------------- */
+function save() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) { /* 忽略 */ }
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const o = JSON.parse(raw);
+    if (!o || !Array.isArray(o.rows)) return false;
+    state = Object.assign(state, o);
+    // 兼容/修复
+    if (!Array.isArray(state.textOrder) || !state.textOrder.length) state.textOrder = ['name','actor'];
+    if (state.hasUnit && state.textOrder.length < 3 && !state.textOrder.includes('unit')) {
+      state.textOrder.push('unit');
+    }
+    if (!state.hasUnit) state.textOrder = state.textOrder.filter(k => k !== 'unit');
+    state.rows.forEach(r => {
+      if (!r.id) r.id = uid();
+      if (!Array.isArray(r.scores)) r.scores = [];
+    });
+    return true;
+  } catch (e) { return false; }
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+/* ---------------- 提示 ---------------- */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+/* ---------------- 分数解析 ----------------
+   规则：用户输入纯数字，按小数位在末尾插入小数点
+   10分/2位：928 → 9.28 ；1000 → 10.00
+   如果用户自己打了小数点，则直接按小数解析
+------------------------------------------- */
+function parseScore(raw, maxScore, decimals) {
+  if (raw === null || raw === undefined) return null;
+  let s = String(raw).trim();
+  if (s === '') return null;
+  // 只保留数字、小数点和负号
+  s = s.replace(/[^\d.\-]/g, '');
+  if (s === '' || s === '.' || s === '-') return null;
+
+  // 用户主动打了小数点 → 直接解析
+  if (s.includes('.')) {
+    const v = parseFloat(s);
+    return isNaN(v) ? null : v;
+  }
+
+  const n = parseInt(s, 10);
+  if (isNaN(n)) return null;
+  if (decimals === 0) return n;
+  return n / Math.pow(10, decimals);
+}
+
+// 格式化显示
+function fmtScore(v, decimals) {
+  if (v === null || v === undefined || isNaN(v)) return '';
+  return v.toFixed(decimals);
+}
+
+/* ---------------- 计算某行统计 ---------------- */
+function calcRow(row) {
+  const vals = [];
+  const rawIdx = [];
+  for (let i = 0; i < state.judgeCount; i++) {
+    const v = parseScore(row.scores[i], state.maxScore, state.decimals);
+    if (v !== null) { vals.push(v); rawIdx.push(i); }
+  }
+  if (!vals.length) {
+    return { avg: null, sum: 0, count: 0, highest: [], lowest: [], dropped: [] };
+  }
+
+  // 找出最高/最低（可能有多个并列）
+  const max = Math.max(...vals);
+  const min = Math.min(...vals);
+  const highest = [];
+  const lowest = [];
+  vals.forEach((v, k) => {
+    if (Math.abs(v - max) < 1e-9) highest.push(rawIdx[k]);
+    if (Math.abs(v - min) < 1e-9) lowest.push(rawIdx[k]);
+  });
+
+  let useVals = vals.slice();
+  let useIdx = rawIdx.slice();     // 与 useVals 同步的原始列索引
+  let dropped = [];
+
+  // 去掉一个最高和一个最低
+  if (state.dropHighLow && vals.length >= 3) {
+    // 去掉一个最高（取第一个出现的）
+    const hiIdx = useVals.indexOf(Math.max(...useVals));
+    if (hiIdx >= 0) {
+      dropped.push(useIdx[hiIdx]);
+      useVals.splice(hiIdx, 1);
+      useIdx.splice(hiIdx, 1);
+    }
+
+    // 在剩下的里再去掉一个最低
+    const loIdx = useVals.indexOf(Math.min(...useVals));
+    if (loIdx >= 0) {
+      dropped.push(useIdx[loIdx]);
+      useVals.splice(loIdx, 1);
+      useIdx.splice(loIdx, 1);
+    }
+  }
+
+  const sum = useVals.reduce((a, b) => a + b, 0);
+  const avg = sum / useVals.length;
+
+  return { avg, sum, count: useVals.length, highest, lowest, dropped };
+}
+
+/* ---------------- 计算所有行排名 ---------------- */
+function computeRanks() {
+  const list = state.rows.map(r => {
+    const st = calcRow(r);
+    return { id: r.id, avg: st.avg };
+  }).filter(x => x.avg !== null);
+
+  // 按平均分从高到低
+  list.sort((a, b) => b.avg - a.avg);
+
+  const rankMap = {};   // id -> 名次数字
+  let lastAvg = null, lastRank = 0;
+  list.forEach((x, i) => {
+    if (lastAvg !== null && Math.abs(x.avg - lastAvg) < 1e-9) {
+      rankMap[x.id] = lastRank;
+    } else {
+      rankMap[x.id] = i + 1;
+      lastRank = i + 1;
+      lastAvg = x.avg;
+    }
+  });
+  return { rankMap, sorted: list };
+}
+
+/* ---------------- 渲染表头 ---------------- */
+function renderHead() {
+  const tr = document.getElementById('theadRow');
+  let html = '';
+
+  // 序号（固定列，不参与列切换，不能删除）
+  html += `<th class="fixed-col" style="width:56px"><div class="th-inner">序号</div></th>`;
+
+  // 文本列（整格可点击切换）
+  state.textOrder.forEach((key, pos) => {
+    const label = TEXT_COLS[key] ? TEXT_COLS[key].label : key;
+    html += `<th class="switchable" style="min-width:${key === 'name' ? 190 : 140}px"
+      data-textpos="${pos}" onclick="openColMenu(event, ${pos})"
+      title="点击整格可切换这一列的内容">
+      <div class="th-inner">
+        <span>${esc(label)}</span>
+        <span class="caret">▼</span>
+      </div></th>`;
+  });
+
+  // 评委
+  for (let i = 0; i < state.judgeCount; i++) {
+    html += `<th class="score-col" style="width:74px"><div class="th-inner">评委${i + 1}</div></th>`;
+  }
+
+  // 平均分、名次
+  html += `<th style="width:80px"><div class="th-inner">平均分</div></th>`;
+  html += `<th style="width:74px"><div class="th-inner">名次</div></th>`;
+
+  tr.innerHTML = html;
+}
+
+/* ---------------- 渲染表体 ---------------- */
+function renderBody() {
+  const tbody = document.getElementById('tbody');
+  const { rankMap } = computeRanks();
+
+  tbody.innerHTML = '';
+
+  state.rows.forEach((row, ri) => {
+    const st = calcRow(row);
+    const tr = document.createElement('tr');
+    tr.dataset.rid = row.id;
+
+    // 右键菜单：删除这一行
+    tr.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      showCtxMenu(e, row.id);
+    });
+
+    // 序号（固定列，不可删除，可手动改数字）
+    const tdNo = makeInputTd(
+      'number', row.no === undefined || row.no === '' ? (ri + 1) : row.no,
+      v => { row.no = v; save(); },
+      'cell no', 60 + ri * 100, 26
+    );
+    tdNo.classList.add('fixed-col');
+    tr.appendChild(tdNo);
+
+    // 文本列
+    state.textOrder.forEach((key, pos) => {
+      tr.appendChild(makeInputTd(
+        'text', row[key] || '',
+        v => { row[key] = v; save(); },
+        'cell text', 60 + ri * 100 + pos + 1, key === 'name' ? 190 : 140
+      ));
+    });
+
+    // 评委分数
+    for (let i = 0; i < state.judgeCount; i++) {
+      const td = document.createElement('td');
+      td.className = 'score';
+      if (st.highest.includes(i)) td.classList.add('highest');
+      if (st.lowest.includes(i)) td.classList.add('lowest');
+      if (st.dropped.includes(i)) td.classList.add('dropped');
+
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.inputMode = 'numeric';
+      inp.className = 'cell';
+      inp.value = row.scores[i] === undefined ? '' : row.scores[i];
+      inp.placeholder = '';
+      inp.tabIndex = 60 + ri * 100 + 10 + i;
+      inp.title = '直接输入数字，按规则自动换算';
+      inp.oninput = () => {
+        row.scores[i] = inp.value;
+        save();
+        refreshStats();     // 只重算统计，不重建 DOM（避免丢焦点）
+      };
+      inp.onkeydown = (e) => {
+        if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+          e.preventDefault();
+          moveFocus(inp, e.shiftKey ? -1 : 1);
+        }
+        if (e.key === 'Tab' && e.shiftKey) {
+          e.preventDefault();
+          moveFocus(inp, -1);
+        }
+      };
+      td.appendChild(inp);
+      tr.appendChild(td);
+    }
+
+    // 平均分
+    const tdAvg = document.createElement('td');
+    tdAvg.className = 'avg';
+    tr.appendChild(tdAvg);
+
+    // 名次
+    const tdRank = document.createElement('td');
+    tdRank.className = 'rank';
+    tr.appendChild(tdRank);
+
+    tbody.appendChild(tr);
+  });
+
+  refreshStats();
+
+  // 表格始终显示：没有数据时也至少保留一行可编辑的空行
+  document.getElementById('tableWrap').style.display = 'block';
+  document.getElementById('emptyTip').style.display = 'none';
+}
+
+/* ---------------- 确保至少有一行 ---------------- */
+const DEFAULT_ROWS = 20;   // 默认生成 20 行空表格
+
+function makeEmptyRow(no) {
+  return { id: uid(), no: no, name: '', actor: '', unit: '', scores: [] };
+}
+
+// 补齐到 20 行（只在没有真实数据时用）
+function ensureDefaultRows() {
+  if (state.rows.length === 0) {
+    for (let i = 1; i <= DEFAULT_ROWS; i++) {
+      state.rows.push(makeEmptyRow(i));
+    }
+    save();
+  }
+}
+
+// 兜底：至少留一行
+function ensureAtLeastOneRow() {
+  if (state.rows.length === 0) {
+    state.rows.push(makeEmptyRow(1));
+    save();
+  }
+}
+
+/* ---------------- 只刷新统计（不重建 DOM）---------------- */
+function refreshStats() {
+  const { rankMap } = computeRanks();
+  const awardMap = computeAwards(rankMap);
+
+  state.rows.forEach(row => {
+    const tr = document.querySelector(`tr[data-rid="${row.id}"]`);
+    if (!tr) return;
+
+    const st = calcRow(row);
+
+    // 更新分数格高亮
+    const scoreTds = tr.querySelectorAll('td.score');
+    scoreTds.forEach((td, i) => {
+      td.classList.toggle('highest', st.highest.includes(i));
+      td.classList.toggle('lowest', st.lowest.includes(i));
+      td.classList.toggle('dropped', st.dropped.includes(i));
+
+      // 超范围标红
+      const v = parseScore(row.scores[i], state.maxScore, state.decimals);
+      const bad = v !== null && (v < 0 || v > state.maxScore);
+      td.classList.toggle('invalid', bad);
+      const inp = td.querySelector('input');
+      if (inp) inp.title = bad ? `超出范围 0-${state.maxScore}` : '直接输入数字，按规则自动换算';
+    });
+
+    // 平均分
+    const tdAvg = tr.querySelector('td.avg');
+    if (tdAvg) {
+      if (st.avg === null) {
+        tdAvg.textContent = '—';
+        tdAvg.style.color = '#c0c4cc';
+      } else {
+        tdAvg.textContent = fmtScore(st.avg, state.decimals);
+        tdAvg.style.color = '#3370ff';
+      }
+    }
+
+    // 名次
+    const tdRank = tr.querySelector('td.rank');
+    if (tdRank) {
+      const rk = rankMap[row.id];
+      if (!rk) {
+        tdRank.innerHTML = '<span style="color:#c0c4cc">—</span>';
+      } else {
+        const award = awardMap[row.id];
+        if (award) {
+          const cls = award === '第一名' ? 'g1' : award === '第二名' ? 'g2' : 'g3';
+          tdRank.innerHTML = `<span class="rank-tag ${cls}">${award}</span>`;
+        } else {
+          tdRank.innerHTML = `<span class="rank-tag plain">${rk}</span>`;
+        }
+      }
+    }
+  });
+}
+
+/* ---------------- 奖项计算 ----------------
+   按排名分配：前 N1 个是第一名，接着 N2 个第二名，接着 N3 个第三名
+   其余不显示奖项，只显示数字名次
+------------------------------------------- */
+function computeAwards(rankMap) {
+  const { first, second, third } = state.awards;
+  const total = first + second + third;
+  if (total <= 0) return {};
+
+  // 按名次排序取出
+  const entries = Object.entries(rankMap)
+    .map(([id, rk]) => ({ id, rk }))
+    .sort((a, b) => a.rk - b.rk);
+
+  const map = {};
+  let idx = 0;
+  for (let i = 0; i < first && idx < entries.length; i++, idx++) {
+    map[entries[idx].id] = '第一名';
+  }
+  for (let i = 0; i < second && idx < entries.length; i++, idx++) {
+    map[entries[idx].id] = '第二名';
+  }
+  for (let i = 0; i < third && idx < entries.length; i++, idx++) {
+    map[entries[idx].id] = '第三名';
+  }
+  return map;
+}
+
+/* ---------------- 输入单元格工具 ---------------- */
+function makeInputTd(type, value, onChange, cls, tabIdx, minWidth) {
+  const td = document.createElement('td');
+  if (minWidth) td.style.minWidth = minWidth + 'px';
+  const inp = document.createElement('input');
+  inp.type = type;
+  inp.className = cls || 'cell';
+  inp.value = value === undefined || value === null ? '' : value;
+  if (tabIdx !== undefined) inp.tabIndex = tabIdx;
+  if (type === 'number') inp.min = 1;
+  inp.oninput = () => onChange(inp.value);
+  inp.onkeydown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); moveFocus(inp, 1); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      moveFocus(inp, e.shiftKey ? -1 : 1);
+    }
+  };
+
+  // 单元格：右键菜单 + 智能粘贴
+  bindCellClipboard(inp);
+
+  td.appendChild(inp);
+  return td;
+}
+
+/* ============================================================
+   单元格剪贴板：右键复制/剪切/粘贴 + 多格粘贴自动拆分
+   只取纯文本内容，忽略 Excel/Word 的所有格式（字体、字号、颜色等）
+   ============================================================ */
+
+// 智能拆分一段文本为二维数组（行 × 列）
+function parseClipboardGrid(text) {
+  if (!text) return [];
+  // 统一换行
+  const rawLines = text.replace(/\r\n?/g, '\n').split('\n');
+  // 去掉末尾空行
+  while (rawLines.length && rawLines[rawLines.length - 1].trim() === '') rawLines.pop();
+  if (!rawLines.length) return [];
+
+  return rawLines.map(line => splitLine(line));
+}
+
+// 判断是否为「单值」（无分隔符、单行）
+function isSingleValue(text) {
+  if (!text) return true;
+  const t = text.replace(/\r\n?/g, '\n');
+  if (t.includes('\n') && t.trim().split('\n').filter(Boolean).length > 1) return false;
+  return splitLine(t.trim()).length <= 1;
+}
+
+function bindCellClipboard(inp) {
+  // ---- 右键菜单 ----
+  inp.addEventListener('contextmenu', e => {
+    // 只有文字类单元格才给剪贴板菜单；分数格保持原生
+    if (inp.classList.contains('text') || inp.classList.contains('no')) {
+      e.preventDefault();
+      e.stopPropagation();
+      showCellMenu(e, inp);
+    }
+  });
+
+  // ---- 粘贴：智能拆分 ----
+  inp.addEventListener('paste', e => {
+    const cd = e.clipboardData || window.clipboardData;
+    if (!cd) return;
+    // 只取纯文本，彻底忽略 text/html 里的字体字号等格式
+    let text = cd.getData('text/plain');
+    if (!text) {
+      // 某些环境只给 html，从 html 里剥出纯文本
+      const html = cd.getData('text/html');
+      if (html) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        text = tmp.innerText;
+      }
+    }
+    if (!text) return;
+
+    // 单值 → 让浏览器默认处理（只填当前格）
+    if (isSingleValue(text)) {
+      e.preventDefault();
+      // 清洗：去掉首尾空白和换行，只保留纯文本
+      const clean = text.replace(/\r?\n/g, ' ').trim();
+      inp.value = clean;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+
+    // 多值 → 拦截，按网格填充
+    e.preventDefault();
+    pasteGrid(inp, text);
+  });
+}
+
+// 从某个单元格开始，按二维网格填充
+function pasteGrid(startInput, text) {
+  const grid = parseClipboardGrid(text);
+  if (!grid.length) return;
+
+  const rows = grid.length;
+  const cols = Math.max(...grid.map(r => r.length));
+
+  // 找到起始单元格位置
+  const pos = locateCell(startInput);
+  if (!pos) { toast('无法定位单元格'); return; }
+
+  const { rowIdx, colIdx } = pos;
+
+  // 目标行不够 → 自动补行
+  while (state.rows.length < rowIdx + rows) {
+    state.rows.push(makeEmptyRow(state.drawOrder ? '' : state.rows.length + 1));
+  }
+
+  let filled = 0;
+  for (let r = 0; r < rows; r++) {
+    const row = state.rows[rowIdx + r];
+    if (!row) continue;
+    for (let c = 0; c < grid[r].length; c++) {
+      const val = (grid[r][c] || '').trim();
+      if (!val) continue;
+      const targetCol = colIdx + c;
+      if (applyValueToCell(row, targetCol, val)) filled++;
+    }
+  }
+
+  save();
+  renderBody();
+  toast(`已粘贴 ${rows} 行 × ${cols} 列，共填入 ${filled} 个单元格`);
+}
+
+// 定位某个 input 在表格中的行列位置
+function locateCell(inp) {
+  const tr = inp.closest('tr');
+  if (!tr) return null;
+  const tbody = document.getElementById('tbody');
+  const rowIdx = [...tbody.children].indexOf(tr);
+  if (rowIdx < 0) return null;
+
+  const td = inp.closest('td');
+  const colIdx = [...tr.children].indexOf(td);
+  return { rowIdx, colIdx };
+}
+
+// 把值写入某行的某列（列索引对应表格列）
+// 列 0 = 序号；1..N = 文本列；之后是评委分数
+function applyValueToCell(row, colIdx, val) {
+  const textStart = 1;
+  const textEnd = textStart + state.textOrder.length;   // 不含
+  const scoreStart = textEnd;
+
+  if (colIdx === 0) {
+    // 序号：只接受数字
+    const num = val.replace(/[^\d.]/g, '');
+    if (num) { row.no = num; return true; }
+    return false;
+  }
+
+  if (colIdx >= textStart && colIdx < textEnd) {
+    const key = state.textOrder[colIdx - textStart];
+    if (key) { row[key] = val; return true; }
+    return false;
+  }
+
+  if (colIdx >= scoreStart && colIdx < scoreStart + state.judgeCount) {
+    const si = colIdx - scoreStart;
+    const num = val.replace(/[^\d.]/g, '');
+    if (num) { row.scores[si] = num; return true; }
+    return false;
+  }
+
+  return false;   // 平均分/名次列不可写
+}
+
+/* ---------------- 单元格右键菜单 ---------------- */
+let cellMenuTarget = null;
+
+function showCellMenu(ev, inp) {
+  cellMenuTarget = inp;
+  const menu = document.getElementById('cellMenu');
+
+  // 有选中内容才能剪切/复制
+  const hasSel = inp.selectionStart !== inp.selectionEnd;
+  const hasVal = inp.value.length > 0;
+
+  const items = [
+    { act: 'cut',   ico: '✂', text: '剪切',   disabled: !hasSel },
+    { act: 'copy',  ico: '⧉', text: '复制',   disabled: !hasSel && !hasVal },
+    { act: 'paste', ico: '📋', text: '粘贴',   disabled: false },
+  ];
+
+  menu.innerHTML = items.map(it =>
+    `<div class="item ${it.disabled ? 'disabled' : ''}" data-act="${it.act}">
+       <span class="ico">${it.ico}</span>${it.text}
+     </div>`
+  ).join('');
+
+  menu.querySelectorAll('.item').forEach(el => {
+    if (el.classList.contains('disabled')) return;
+    el.onclick = () => { doCellAction(el.dataset.act); hideCellMenu(); };
+  });
+
+  menu.classList.add('show');
+  const mw = 150, mh = 130;
+  let x = ev.clientX, y = ev.clientY;
+  if (x + mw > window.innerWidth) x = window.innerWidth - mw - 8;
+  if (y + mh > window.innerHeight) y = window.innerHeight - mh - 8;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+function hideCellMenu() {
+  document.getElementById('cellMenu').classList.remove('show');
+  cellMenuTarget = null;
+}
+
+async function doCellAction(act) {
+  const inp = cellMenuTarget;
+  if (!inp) return;
+
+  if (act === 'copy') {
+    const sel = inp.value.substring(inp.selectionStart, inp.selectionEnd);
+    const text = sel || inp.value;
+    if (!text) { toast('没有内容可复制'); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('已复制');
+    } catch {
+      // 回退方案
+      inp.select();
+      document.execCommand('copy');
+      toast('已复制');
+    }
+    return;
+  }
+
+  if (act === 'cut') {
+    const s = inp.selectionStart, e2 = inp.selectionEnd;
+    const sel = inp.value.substring(s, e2);
+    if (!sel) { toast('先选中要剪切的内容'); return; }
+    try {
+      await navigator.clipboard.writeText(sel);
+    } catch {
+      inp.select();
+      document.execCommand('copy');
+    }
+    inp.value = inp.value.substring(0, s) + inp.value.substring(e2);
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    toast('已剪切');
+    return;
+  }
+
+  if (act === 'paste') {
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      toast('浏览器不允许读取剪贴板，请用 Ctrl+V 粘贴');
+      return;
+    }
+    if (!text) { toast('剪贴板是空的'); return; }
+
+    if (isSingleValue(text)) {
+      inp.value = text.replace(/\r?\n/g, ' ').trim();
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      toast('已粘贴');
+    } else {
+      pasteGrid(inp, text);
+    }
+  }
+}
+
+function moveFocus(fromEl, dir) {
+  const all = [...document.querySelectorAll('#tbody input.cell')];
+  const i = all.indexOf(fromEl);
+  if (i < 0) return;
+  const next = all[i + dir];
+  if (next) {
+    next.focus();
+    next.select && next.select();
+  }
+}
+
+/* ---------------- 列头下拉菜单 ---------------- */
+function openColMenu(ev, pos) {
+  ev.stopPropagation();
+  const menu = document.getElementById('colMenu');
+  const cur = state.textOrder[pos];
+
+  const options = ['name', 'actor'];
+  if (state.hasUnit) options.push('unit');
+
+  let html = '';
+  options.forEach(key => {
+    const used = state.textOrder.includes(key) && state.textOrder[pos] !== key;
+    html += `<div class="item ${cur === key ? 'sel' : ''}" onclick="switchCol(${pos}, '${key}')">
+      <span class="dot"></span>${TEXT_COLS[key].label}${used ? '（已在其他列）' : ''}
+    </div>`;
+  });
+  menu.innerHTML = html;
+  menu.classList.add('show');
+
+  // 定位
+  const rect = ev.target.getBoundingClientRect();
+  menu.style.left = Math.min(rect.left, window.innerWidth - 170) + 'px';
+  menu.style.top = (rect.bottom + 4) + 'px';
+
+  lastColMenuTarget = pos;
+}
+
+function switchCol(pos, key) {
+  const menu = document.getElementById('colMenu');
+  menu.classList.remove('show');
+
+  const cur = state.textOrder[pos];
+  if (cur === key) return;
+
+  // 如果该 key 已在别的列，交换
+  const otherPos = state.textOrder.indexOf(key);
+  if (otherPos >= 0) {
+    state.textOrder[otherPos] = cur;
+  }
+  state.textOrder[pos] = key;
+
+  save();
+  renderHead();
+  renderBody();
+  toast('列已切换');
+}
+
+document.addEventListener('click', () => {
+  document.getElementById('colMenu').classList.remove('show');
+});
+
+/* ---------------- 规则变更 ---------------- */
+function setMax(v) {
+  if (state.maxScore === v) return;
+  state.maxScore = v;
+  save();
+  updateRuleButtons();
+  renderBody();
+  toast(`满分设为 ${v} 分`);
+}
+
+function setDecimals(v) {
+  if (state.decimals === v) return;
+  state.decimals = v;
+  save();
+  updateRuleButtons();
+  renderBody();
+  toast(`小数位设为${v === 0 ? '整数' : v + '位'}`);
+}
+
+function onAwardChange() {
+  state.awards.first  = clampInt(document.getElementById('aw1').value, 0, 99);
+  state.awards.second = clampInt(document.getElementById('aw2').value, 0, 99);
+  state.awards.third  = clampInt(document.getElementById('aw3').value, 0, 99);
+  save();
+  refreshStats();
+}
+
+function clampInt(v, lo, hi) {
+  const n = parseInt(v, 10);
+  if (isNaN(n)) return lo;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function onRuleChange() {
+  state.dropHighLow = document.getElementById('chkDropHighLow').checked;
+  save();
+  renderBody();
+}
+
+function onHasUnitChange() {
+  state.hasUnit = document.getElementById('chkHasUnit').checked;
+  if (state.hasUnit) {
+    if (!state.textOrder.includes('unit')) state.textOrder.push('unit');
+  } else {
+    state.textOrder = state.textOrder.filter(k => k !== 'unit');
+  }
+  save();
+  renderHead();
+  renderBody();
+}
+
+function onHideScoresChange() {
+  state.hideScores = document.getElementById('chkHideScores').checked;
+  document.body.classList.toggle('hide-scores', state.hideScores);
+  save();
+}
+
+/* 现场抽签顺序：勾选后导入不自动填序号，由用户手填后再按序号排序 */
+function onDrawOrderChange() {
+  state.drawOrder = document.getElementById('chkDrawOrder').checked;
+  const row = document.querySelector('.highlight-row');
+  if (row) row.classList.toggle('active', state.drawOrder);
+  save();
+  toast(state.drawOrder
+    ? '已开启抽签顺序：导入只填节目，序号留空手填'
+    : '已关闭抽签顺序：导入自动编号');
+}
+
+function updateRuleButtons() {
+  document.getElementById('btnMax10').classList.toggle('on', state.maxScore === 10);
+  document.getElementById('btnMax100').classList.toggle('on', state.maxScore === 100);
+  document.getElementById('btnDec0').classList.toggle('on', state.decimals === 0);
+  document.getElementById('btnDec2').classList.toggle('on', state.decimals === 2);
+  document.getElementById('btnDec3').classList.toggle('on', state.decimals === 3);
+}
+
+/* ---------------- 行操作 ---------------- */
+function addRow() {
+  const n = state.rows.length;
+  const row = { id: uid(), no: n + 1, name: '', actor: '', unit: '', scores: [] };
+  state.rows.push(row);
+  save();
+  renderBody();
+  // 聚焦到新行的节目名称
+  setTimeout(() => {
+    const tr = document.querySelector(`tr[data-rid="${row.id}"]`);
+    if (tr) {
+      const first = tr.querySelector('input.cell.text');
+      if (first) first.focus();
+      tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, 30);
+}
+
+function delRow() {
+  if (!state.rows.length) { toast('没有可删除的行'); return; }
+  const last = state.rows[state.rows.length - 1];
+  const name = last.name || `第 ${state.rows.length} 行`;
+  if (!confirm(`删除最后一行「${name}」？`)) return;
+  state.rows.pop();
+  ensureAtLeastOneRow();   // 删光了也保留一行可编辑空行
+  save();
+  renderBody();
+}
+
+/* 序号自动重排为 1,2,3...（用户点「序号排序」时才会触发） */
+function renumberRows() {
+  state.rows.forEach((r, i) => { r.no = i + 1; });
+}
+
+function addJudge() {
+  if (state.judgeCount >= 20) { toast('最多 20 个评委'); return; }
+  state.judgeCount++;
+  save();
+  renderHead();
+  renderBody();
+  toast(`现在是 ${state.judgeCount} 个评委`);
+}
+
+function delJudge() {
+  if (state.judgeCount <= 1) { toast('至少保留 1 个评委'); return; }
+  if (!confirm(`减少到 ${state.judgeCount - 1} 个评委？\n最后一个评委的分数会被删除。`)) return;
+  state.judgeCount--;
+  // 清掉超出范围的分数
+  state.rows.forEach(r => { r.scores = r.scores.slice(0, state.judgeCount); });
+  save();
+  renderHead();
+  renderBody();
+  toast(`现在是 ${state.judgeCount} 个评委`);
+}
+
+/* ---------------- 排序 ---------------- */
+function sortByNo() {
+  // 按序号数字排序（序号为空的行自动排到最后）
+  const filled = state.rows.filter(r => {
+    const n = parseFloat(r.no);
+    return !isNaN(n);
+  });
+  const empty = state.rows.filter(r => {
+    const n = parseFloat(r.no);
+    return isNaN(n);
+  });
+
+  if (!filled.length) {
+    toast('还没有填序号');
+    return;
+  }
+
+  filled.sort((a, b) => parseFloat(a.no) - parseFloat(b.no));
+  state.rows = [...filled, ...empty];
+
+  save();
+  renderBody();
+  toast(`已按序号排序（${filled.length} 行有号，${empty.length} 行未填号排在最后）`);
+}
+
+function sortByScore() {
+  const withAvg = state.rows.filter(r => calcRow(r).avg !== null);
+  const noAvg = state.rows.filter(r => calcRow(r).avg === null);
+  if (!withAvg.length) { toast('还没有打过分的节目'); return; }
+
+  withAvg.sort((a, b) => calcRow(b).avg - calcRow(a).avg);
+  state.rows = [...withAvg, ...noAvg];
+  save();
+  renderBody();
+  toast('已按分数从高到低排序');
+}
+
+/* ---------------- 清空 ---------------- */
+function clearAll() {
+  if (!state.rows.length) { toast('已经是空的了'); return; }
+  if (!confirm('确定清空全部节目和分数？\n建议先导出备份。')) return;
+  if (!confirm('再确认一次：数据将全部删除，无法恢复。')) return;
+  state.rows = [];
+  for (let i = 1; i <= DEFAULT_ROWS; i++) state.rows.push(makeEmptyRow(i));
+  save();
+  renderBody();
+  toast(`已清空，恢复为 ${DEFAULT_ROWS} 行空表格`);
+}
+
+/* ---------------- 导入 ----------------
+   兼容：制表符、逗号、中文逗号、顿号、竖线、分号、2+连续空格
+------------------------------------------- */
+function splitLine(line) {
+  // 优先制表符
+  if (line.includes('\t')) return line.split('\t').map(s => s.trim());
+
+  // 竖线
+  if (line.includes('|')) return line.split('|').map(s => s.trim());
+
+  // 中文/英文分号
+  if (/[；;]/.test(line)) return line.split(/[；;]/).map(s => s.trim());
+
+  // 中文/英文逗号
+  if (/[，,]/.test(line)) return line.split(/[，,]/).map(s => s.trim());
+
+  // 顿号
+  if (line.includes('、')) return line.split('、').map(s => s.trim());
+
+  // 两个以上连续空格
+  if (/ {2,}/.test(line)) return line.split(/ {2,}/).map(s => s.trim());
+
+  // 单个空格也试试（至少分成两段）
+  const parts = line.split(/\s+/).filter(Boolean);
+  if (parts.length > 1) return parts;
+
+  return [line.trim()];
+}
+
+function doImport() {
+  const box = document.getElementById('importBox');
+  const text = box.value;
+  if (!text.trim()) { toast('先粘贴内容'); return; }
+
+  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (!lines.length) { toast('没识别到内容'); return; }
+
+  // 预扫描：如果所有行的第一列都是纯数字，认为第一列是序号
+  // 现场抽签模式下，序号由用户手填，所以不跳过第一列（当作节目名）
+  const parsed = lines.map(splitLine);
+  let skipFirstCol = false;
+  if (!state.drawOrder) {
+    const firstCols = parsed.map(p => p[0]).filter(x => x !== undefined && x !== '');
+    if (firstCols.length === parsed.length &&
+        firstCols.every(x => /^\d+(\.0)?$/.test(String(x).trim()))) {
+      skipFirstCol = true;
+    }
+  }
+
+  // 判断某行是否为「空行」（没有节目名/人员/单位，也没打分）
+  const isEmptyRow = r =>
+    !(r.name || '').trim() &&
+    !(r.actor || '').trim() &&
+    !(r.unit || '').trim() &&
+    !(r.scores || []).some(s => String(s || '').trim() !== '');
+
+  // 收集所有空行的索引（从前往后填）
+  let emptyIdx = [];
+  state.rows.forEach((r, i) => { if (isEmptyRow(r)) emptyIdx.push(i); });
+
+  let filled = 0;    // 填入空行的数量
+  let appended = 0;  // 追加新行的数量
+  let cursor = 0;    // 空行游标
+
+  parsed.forEach(cols => {
+    let c = cols.slice();
+    if (skipFirstCol) c.shift();
+    if (!c.length) return;
+
+    // 按当前列顺序解析出文本
+    const data = {};
+    state.textOrder.forEach((key, pos) => {
+      data[key] = c[pos] !== undefined ? c[pos] : '';
+    });
+
+    // 多余列尝试识别为分数
+    const scores = [];
+    const extra = c.slice(state.textOrder.length);
+    extra.forEach((v, k) => {
+      if (k < state.judgeCount && /^\d+(\.\d+)?$/.test(String(v).trim())) {
+        scores[k] = String(v).trim();
+      }
+    });
+
+    // 整行没内容就跳过
+    const hasText = state.textOrder.some(key => (data[key] || '').trim() !== '');
+    if (!hasText) return;
+
+    // 优先填入已有的空行
+    if (cursor < emptyIdx.length) {
+      const target = state.rows[emptyIdx[cursor]];
+      cursor++;
+      state.textOrder.forEach(key => { target[key] = data[key]; });
+      if (scores.length) target.scores = scores;
+      // 抽签模式：序号留空由用户手填；否则自动编号
+      if (state.drawOrder) target.no = '';
+      filled++;
+    } else {
+      // 空行不够 → 追加新行
+      const row = {
+        id: uid(),
+        no: state.drawOrder ? '' : state.rows.length + 1,
+        name: '', actor: '', unit: '', scores: []
+      };
+      state.textOrder.forEach(key => { row[key] = data[key]; });
+      if (scores.length) row.scores = scores;
+      state.rows.push(row);
+      appended++;
+    }
+  });
+
+  const total = filled + appended;
+  if (!total) { toast('没识别出节目，检查一下格式'); return; }
+
+  save();
+  renderBody();
+  box.value = '';
+  updateImportCount();
+
+  if (appended > 0) {
+    toast(`已填入 ${filled} 行，新增 ${appended} 行（共 ${total} 个节目）`);
+  } else {
+    toast(`已填入表格 ${filled} 行`);
+  }
+}
+
+function updateImportCount() {
+  const box = document.getElementById('importBox');
+  const el = document.getElementById('importCount');
+  if (!box || !el) return;
+  const n = box.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean).length;
+  if (n === 0) {
+    el.textContent = '等待粘贴…';
+    el.style.color = '#8f959e';
+  } else {
+    el.textContent = `识别到 ${n} 行`;
+    el.style.color = '#3370ff';
+  }
+}
+
+/* ============================================================
+   比赛设置：导出 / 导入
+   打包内容：标题 + 全部规则 + 完整节目单（含已填分数）
+   ============================================================ */
+const SETUP_VERSION = 2;
+
+function exportSetup() {
+  if (!state.rows.length) {
+    toast('还没有节目，先导入名单');
+    return;
+  }
+
+  // 只导出有内容的行（去掉纯空行）
+  const rows = state.rows.filter(r =>
+    (r.name || '').trim() || (r.actor || '').trim() || (r.unit || '').trim() ||
+    (r.scores || []).some(s => String(s || '').trim() !== '')
+  );
+
+  if (!rows.length) {
+    toast('表格里没有实际内容');
+    return;
+  }
+
+  const pack = {
+    _type: 'judge-score-setup',
+    _version: SETUP_VERSION,
+    _exportedAt: new Date().toISOString(),
+    _note: '评委打分系统 - 比赛设置文件。可直接用记事本查看，但请勿手动修改结构。',
+    title: state.title || '',
+    settings: {
+      maxScore: state.maxScore,
+      decimals: state.decimals,
+      judgeCount: state.judgeCount,
+      hasUnit: state.hasUnit,
+      hideScores: state.hideScores,
+      dropHighLow: state.dropHighLow,
+      drawOrder: state.drawOrder,
+      awards: { ...state.awards },
+      textOrder: [...state.textOrder]
+    },
+    rows: rows.map(r => ({
+      no: r.no === undefined || r.no === null ? '' : r.no,
+      name: r.name || '',
+      actor: r.actor || '',
+      unit: r.unit || '',
+      scores: (r.scores || []).map(s => (s === undefined || s === null ? '' : String(s)))
+    }))
+  };
+
+  const json = JSON.stringify(pack, null, 2);
+  const blob = new Blob(['\uFEFF' + json], { type: 'application/json;charset=utf-8' });
+  const name = (state.title || '比赛设置').replace(/[\\/:*?"<>|]/g, '_');
+  downloadBlob(blob, `${name}_${stamp()}.json`);
+
+  toast(`已导出比赛设置（${rows.length} 个节目）`);
+}
+
+function importSetup(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    let pack;
+    try {
+      let text = String(reader.result || '');
+      // 去掉可能的 BOM
+      text = text.replace(/^\uFEFF/, '').trim();
+      pack = JSON.parse(text);
+    } catch (e) {
+      toast('文件格式不对，不是有效的比赛设置文件');
+      input.value = '';
+      return;
+    }
+
+    if (!pack || pack._type !== 'judge-score-setup') {
+      toast('这不是比赛设置文件（类型不匹配）');
+      input.value = '';
+      return;
+    }
+
+    const s = pack.settings || {};
+    const rowCount = Array.isArray(pack.rows) ? pack.rows.length : 0;
+
+    // 确认覆盖
+    const cur = state.rows.filter(r =>
+      (r.name || '').trim() || (r.actor || '').trim() ||
+      (r.scores || []).some(x => String(x || '').trim() !== '')
+    ).length;
+
+    let msg = `导入比赛设置\n\n`;
+    if (pack.title) msg += `活动题目：${pack.title}\n`;
+    msg += `节目数量：${rowCount} 个\n`;
+    msg += `满分 ${s.maxScore || 10} 分 · ${(s.decimals === 0 ? '整数' : (s.decimals || 2) + '位小数')}\n`;
+    msg += `评委 ${s.judgeCount || 5} 人`;
+    if (s.dropHighLow) msg += ' · 去掉一个最高最低';
+    if (s.hasUnit) msg += ' · 有选送单位';
+    msg += `\n\n`;
+    if (cur > 0) {
+      msg += `⚠️ 当前表格已有 ${cur} 行内容，导入后会全部覆盖。\n\n`;
+    }
+    msg += `确定导入？`;
+
+    if (!confirm(msg)) { input.value = ''; return; }
+
+    try {
+      applySetup(pack);
+      toast(`已导入比赛设置：${rowCount} 个节目`);
+    } catch (e) {
+      toast('导入失败：' + e.message);
+    }
+    input.value = '';
+  };
+
+  reader.onerror = () => {
+    toast('读取文件失败');
+    input.value = '';
+  };
+
+  reader.readAsText(file, 'utf-8');
+}
+
+function applySetup(pack) {
+  const s = pack.settings || {};
+
+  // 1. 规则
+  state.maxScore   = (s.maxScore === 100) ? 100 : 10;
+  state.decimals   = [0, 2, 3].includes(s.decimals) ? s.decimals : 2;
+  state.judgeCount = Math.max(1, Math.min(20, parseInt(s.judgeCount, 10) || 5));
+  state.hasUnit    = !!s.hasUnit;
+  state.hideScores = !!s.hideScores;
+  state.dropHighLow = !!s.dropHighLow;
+  state.drawOrder  = !!s.drawOrder;
+
+  const aw = s.awards || {};
+  state.awards = {
+    first:  Math.max(0, Math.min(99, parseInt(aw.first, 10)  || 0)),
+    second: Math.max(0, Math.min(99, parseInt(aw.second, 10) || 0)),
+    third:  Math.max(0, Math.min(99, parseInt(aw.third, 10)  || 0))
+  };
+
+  // 文本列顺序
+  let order = Array.isArray(s.textOrder) ? s.textOrder.filter(k => ['name','actor','unit'].includes(k)) : [];
+  if (!order.length) order = ['name', 'actor'];
+  if (state.hasUnit && !order.includes('unit')) order.push('unit');
+  if (!state.hasUnit) order = order.filter(k => k !== 'unit');
+  // 保证 name 和 actor 都在
+  ['name', 'actor'].forEach(k => { if (!order.includes(k)) order.push(k); });
+  state.textOrder = order;
+
+  // 2. 标题
+  state.title = pack.title || '';
+
+  // 3. 节目行
+  state.rows = [];
+  (pack.rows || []).forEach(r => {
+    const scores = Array.isArray(r.scores) ? r.scores.slice(0, state.judgeCount) : [];
+    // 补齐到评委数量
+    while (scores.length < state.judgeCount) scores.push('');
+    state.rows.push({
+      id: uid(),
+      no: (r.no === undefined || r.no === null) ? '' : r.no,
+      name: r.name || '',
+      actor: r.actor || '',
+      unit: r.unit || '',
+      scores: scores.map(x => (x === undefined || x === null) ? '' : String(x))
+    });
+  });
+
+  // 4. 不足 20 行时补齐空行
+  while (state.rows.length < DEFAULT_ROWS) {
+    state.rows.push(makeEmptyRow(state.drawOrder ? '' : state.rows.length + 1));
+  }
+
+  // 5. 同步界面控件
+  document.getElementById('aw1').value = state.awards.first;
+  document.getElementById('aw2').value = state.awards.second;
+  document.getElementById('aw3').value = state.awards.third;
+  document.getElementById('chkDropHighLow').checked = state.dropHighLow;
+  document.getElementById('chkHasUnit').checked = state.hasUnit;
+  document.getElementById('chkHideScores').checked = state.hideScores;
+  document.getElementById('chkDrawOrder').checked = state.drawOrder;
+  document.body.classList.toggle('hide-scores', state.hideScores);
+
+  const hlRow = document.querySelector('.highlight-row');
+  if (hlRow) hlRow.classList.toggle('active', state.drawOrder);
+
+  updateRuleButtons();
+  renderTitle();
+  renderHead();
+  renderBody();
+  save();
+}
+
+/* ---------------- 导出 Excel ----------------
+   生成 HTML 表格格式的 .xls，Excel/WPS 都能打开
+------------------------------------------- */
+function exportExcel() {
+  if (!state.rows.length) { toast('没有数据可导出'); return; }
+
+  const { rankMap } = computeRanks();
+  const awardMap = computeAwards(rankMap);
+
+  // 表头
+  const totalCols = 1 + state.textOrder.length + (state.hideScores ? 0 : state.judgeCount) + 2;
+  const titleText = state.title || DEFAULT_TITLE;
+
+  let html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">
+  <style>
+    table { border-collapse: collapse; font-family: "Microsoft YaHei"; }
+    th, td { border: 1px solid #999; padding: 5px 8px; text-align: center; font-size: 11pt; }
+    th { background: #f0f0f0; font-weight: bold; }
+    .hi { background: #ffe0e0; color: #c00; font-weight: bold; }
+    .lo { background: #ddf0ff; color: #06c; font-weight: bold; }
+    .avg { background: #f5f8ff; font-weight: bold; color: #3370ff; }
+    .title-row td { border: none; font-size: 16pt; font-weight: bold; padding: 10px 0; text-align: center; }
+  </style></head><body><table>`;
+
+  // 活动题目（跨整行，无边框）
+  html += `<tr class="title-row"><td colspan="${totalCols}">${esc(titleText)}</td></tr>`;
+
+  // 表头行
+  const textLabels = state.textOrder.map(k => TEXT_COLS[k].label);
+  html += '<tr>';
+  html += '<th>序号</th>';
+  textLabels.forEach(l => html += `<th>${esc(l)}</th>`);
+  if (!state.hideScores) {
+    for (let i = 0; i < state.judgeCount; i++) html += `<th>评委${i + 1}</th>`;
+  }
+  html += '<th>平均分</th><th>名次</th>';
+  html += '</tr>';
+
+  // 数据行
+  state.rows.forEach((row, ri) => {
+    const st = calcRow(row);
+    html += '<tr>';
+    html += `<td>${row.no === undefined || row.no === '' ? ri + 1 : esc(row.no)}</td>`;
+    state.textOrder.forEach(k => html += `<td>${esc(row[k] || '')}</td>`);
+
+    if (!state.hideScores) {
+      for (let i = 0; i < state.judgeCount; i++) {
+        const v = parseScore(row.scores[i], state.maxScore, state.decimals);
+        let cls = '';
+        if (st.highest.includes(i)) cls = 'hi';
+        else if (st.lowest.includes(i)) cls = 'lo';
+        html += `<td class="${cls}">${v === null ? '' : fmtScore(v, state.decimals)}</td>`;
+      }
+    }
+
+    const avgStr = st.avg === null ? '' : fmtScore(st.avg, state.decimals);
+    const rk = rankMap[row.id];
+    const award = awardMap[row.id];
+    html += `<td class="avg">${avgStr}</td>`;
+    html += `<td>${award ? award : (rk || '')}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</table></body></html>';
+
+  const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  downloadBlob(blob, `评委打分_${stamp()}.xls`);
+  toast('已导出 Excel');
+}
+
+/* ---------------- 导出图片（Canvas 手绘）---------------- */
+function exportImage() {
+  if (!state.rows.length) { toast('没有数据可导出'); return; }
+
+  const { rankMap } = computeRanks();
+  const awardMap = computeAwards(rankMap);
+
+  const showScores = !state.hideScores;
+  const textLabels = state.textOrder.map(k => TEXT_COLS[k].label);
+
+  // 列定义
+  const cols = [];
+  cols.push({ title: '序号', width: 58 });
+  state.textOrder.forEach(k => {
+    cols.push({ title: TEXT_COLS[k].label, width: k === 'name' ? 210 : 150 });
+  });
+  if (showScores) {
+    for (let i = 0; i < state.judgeCount; i++) cols.push({ title: `评委${i + 1}`, width: 74 });
+  }
+  cols.push({ title: '平均分', width: 88 });
+  cols.push({ title: '名次', width: 82 });
+
+  const totalW = cols.reduce((a, c) => a + c.width, 0);
+  const rowH = 38;
+  const headH = 42;
+  const padTop = 92;    // 上方留出活动标题的位置
+  const padBottom = 30;
+  const tableH = headH + rowH * state.rows.length;
+  const W = totalW + 40;
+  const H = padTop + tableH + padBottom;
+
+  // 高 DPI
+  const dpr = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  // 背景
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  // 活动题目（居中，大标题）
+  const titleText = state.title || DEFAULT_TITLE;
+  ctx.fillStyle = '#1f2329';
+  ctx.font = 'bold 24px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(titleText, W / 2, 34);
+
+  // 规则说明（居中，小字）
+  ctx.fillStyle = '#8f959e';
+  ctx.font = '12px "Microsoft YaHei", sans-serif';
+  const ruleTxt = `满分 ${state.maxScore} 分 · ${state.decimals === 0 ? '整数' : state.decimals + '位小数'}`
+    + (state.dropHighLow ? ' · 去掉一个最高最低' : '');
+  ctx.fillText(ruleTxt, W / 2, 62);
+
+  const startX = 20;
+  let y = padTop;
+
+  // 表头
+  ctx.fillStyle = '#f0f2f5';
+  ctx.fillRect(startX, y, totalW, headH);
+  ctx.strokeStyle = '#c9cdd4';
+  ctx.lineWidth = 1;
+
+  let x = startX;
+  ctx.fillStyle = '#1f2329';
+  ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  cols.forEach(c => {
+    ctx.fillRect(x, y, c.width, headH);
+    ctx.strokeRect(x + .5, y + .5, c.width, headH);
+    ctx.fillText(c.title, x + c.width / 2, y + headH / 2);
+    x += c.width;
+  });
+  y += headH;
+
+  // 数据行
+  ctx.font = '13px "Microsoft YaHei", sans-serif';
+  state.rows.forEach((row, ri) => {
+    const st = calcRow(row);
+    x = startX;
+
+    // 行背景（斑马纹）
+    if (ri % 2 === 1) {
+      ctx.fillStyle = '#fafbfc';
+      ctx.fillRect(startX, y, totalW, rowH);
+    }
+
+    // 序号
+    ctx.fillStyle = '#646a73';
+    ctx.fillText(String(row.no === undefined || row.no === '' ? ri + 1 : row.no), x + cols[0].width / 2, y + rowH / 2);
+    x += cols[0].width;
+
+    // 文本列（左对齐）
+    ctx.textAlign = 'left';
+    state.textOrder.forEach((k, pos) => {
+      const col = cols[1 + pos];
+      ctx.fillStyle = '#1f2329';
+      const txt = clipText(ctx, row[k] || '', col.width - 12);
+      ctx.fillText(txt, x + 6, y + rowH / 2);
+      x += col.width;
+    });
+    ctx.textAlign = 'center';
+
+    // 评委分数
+    if (showScores) {
+      for (let i = 0; i < state.judgeCount; i++) {
+        const col = cols[1 + state.textOrder.length + i];
+        const v = parseScore(row.scores[i], state.maxScore, state.decimals);
+
+        // 最高/最低高亮
+        if (st.highest.includes(i)) {
+          ctx.fillStyle = '#fff1f0';
+          ctx.fillRect(x, y, col.width, rowH);
+          ctx.fillStyle = '#c92a2a';
+          ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+        } else if (st.lowest.includes(i)) {
+          ctx.fillStyle = '#e8f7ff';
+          ctx.fillRect(x, y, col.width, rowH);
+          ctx.fillStyle = '#0b5fa5';
+          ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+        } else {
+          ctx.fillStyle = '#1f2329';
+          ctx.font = '13px "Microsoft YaHei", sans-serif';
+        }
+        if (v !== null) ctx.fillText(fmtScore(v, state.decimals), x + col.width / 2, y + rowH / 2);
+        x += col.width;
+      }
+      ctx.font = '13px "Microsoft YaHei", sans-serif';
+    }
+
+    // 平均分
+    const avgCol = cols[cols.length - 2];
+    ctx.fillStyle = '#f5f8ff';
+    ctx.fillRect(x, y, avgCol.width, rowH);
+    ctx.fillStyle = '#3370ff';
+    ctx.font = 'bold 15px "Microsoft YaHei", sans-serif';
+    if (st.avg !== null) ctx.fillText(fmtScore(st.avg, state.decimals), x + avgCol.width / 2, y + rowH / 2);
+    x += avgCol.width;
+
+    // 名次
+    const rankCol = cols[cols.length - 1];
+    const rk = rankMap[row.id];
+    const award = awardMap[row.id];
+    ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+    if (award) {
+      const bg = award === '第一名' ? '#fff3d6' : award === '第二名' ? '#eef1f6' : '#fbe9e2';
+      const fg = award === '第一名' ? '#a8701a' : award === '第二名' ? '#5a6474' : '#a45a2f';
+      ctx.fillStyle = bg;
+      const tw = ctx.measureText(award).width + 14;
+      ctx.fillRect(x + (rankCol.width - tw) / 2, y + 8, tw, rowH - 16);
+      ctx.fillStyle = fg;
+      ctx.fillText(award, x + rankCol.width / 2, y + rowH / 2);
+    } else {
+      ctx.fillStyle = '#646a73';
+      ctx.font = '13px "Microsoft YaHei", sans-serif';
+      if (rk) ctx.fillText(String(rk), x + rankCol.width / 2, y + rowH / 2);
+    }
+
+    // 行线
+    ctx.strokeStyle = '#e5e6eb';
+    ctx.beginPath();
+    ctx.moveTo(startX, y + rowH);
+    ctx.lineTo(startX + totalW, y + rowH);
+    ctx.stroke();
+
+    // 竖线
+    let vx = startX;
+    ctx.strokeStyle = '#e5e6eb';
+    cols.forEach(c => {
+      ctx.beginPath();
+      ctx.moveTo(vx, y);
+      ctx.lineTo(vx, y + rowH);
+      ctx.stroke();
+      vx += c.width;
+    });
+    ctx.beginPath();
+    ctx.moveTo(startX + totalW, y);
+    ctx.lineTo(startX + totalW, y + rowH);
+    ctx.stroke();
+
+    y += rowH;
+  });
+
+  // 外框
+  ctx.strokeStyle = '#c9cdd4';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(startX + .5, padTop + .5, totalW, tableH);
+
+  // 底部说明
+  ctx.fillStyle = '#b0b4bc';
+  ctx.font = '11px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`共 ${state.rows.length} 个节目 · 导出于 ${new Date().toLocaleString('zh-CN')}`, startX, H - 14);
+
+  // 下载
+  canvas.toBlob(blob => {
+    downloadBlob(blob, `评委打分_${stamp()}.png`);
+    toast('已导出图片');
+  }, 'image/png');
+}
+
+function clipText(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let s = text;
+  while (s.length > 0 && ctx.measureText(s + '…').width > maxW) {
+    s = s.slice(0, -1);
+  }
+  return s + '…';
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function stamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+/* ---------------- 右键菜单：删除行 ---------------- */
+let ctxTargetId = null;
+
+function showCtxMenu(ev, rowId) {
+  ctxTargetId = rowId;
+
+  // 高亮当前行
+  document.querySelectorAll('tbody tr.ctx-active').forEach(t => t.classList.remove('ctx-active'));
+  const tr = document.querySelector(`tr[data-rid="${rowId}"]`);
+  if (tr) tr.classList.add('ctx-active');
+
+  const menu = document.getElementById('ctxMenu');
+  menu.classList.add('show');
+
+  // 定位（防止超出窗口）
+  const mw = 160, mh = 48;
+  let x = ev.clientX, y = ev.clientY;
+  if (x + mw > window.innerWidth) x = window.innerWidth - mw - 8;
+  if (y + mh > window.innerHeight) y = window.innerHeight - mh - 8;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+function hideCtxMenu() {
+  document.getElementById('ctxMenu').classList.remove('show');
+  document.querySelectorAll('tbody tr.ctx-active').forEach(t => t.classList.remove('ctx-active'));
+  ctxTargetId = null;
+}
+
+function ctxInsertRow(where) {
+  const id = ctxTargetId;
+  hideCtxMenu();
+  if (!id) return;
+
+  const idx = state.rows.findIndex(r => r.id === id);
+  if (idx < 0) return;
+
+  const insertAt = where === 'above' ? idx : idx + 1;
+  state.rows.splice(insertAt, 0, makeEmptyRow(0));
+
+  // 重排序号，保持 1,2,3... 连续（抽签模式下序号由用户手填，不自动改）
+  if (!state.drawOrder) {
+    state.rows.forEach((r, i) => { r.no = i + 1; });
+  }
+
+  save();
+  renderBody();
+
+  // 滚动到新插入的行并聚焦节目名称
+  setTimeout(() => {
+    const tr = document.querySelectorAll('#tbody tr')[insertAt];
+    if (tr) {
+      tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const first = tr.querySelector('input.cell.text');
+      if (first) first.focus();
+    }
+  }, 40);
+
+  toast(where === 'above' ? '已在上方插入一行' : '已在下方插入一行');
+}
+
+function ctxDeleteRow() {
+  const id = ctxTargetId;
+  hideCtxMenu();
+  if (!id) return;
+
+  const idx = state.rows.findIndex(r => r.id === id);
+  if (idx < 0) return;
+
+  const row = state.rows[idx];
+  const label = (row.name || '').trim() || (row.actor || '').trim() || `第 ${idx + 1} 行`;
+
+  if (!confirm(`确定删除这一行？\n\n「${label}」\n\n删除后该行的分数也会一起清除。`)) return;
+
+  state.rows.splice(idx, 1);
+  // 删掉一行后，末尾补一行空行，保持表格行数不变
+  state.rows.push(makeEmptyRow(state.rows.length + 1));
+  save();
+  renderBody();
+  toast('已删除该行');
+}
+
+// 点击别处关闭右键菜单（点菜单自身不关，否则点不到删除）
+document.addEventListener('click', e => {
+  const menu = document.getElementById('ctxMenu');
+  if (menu && menu.contains(e.target)) return;   // 点在菜单内部，不关闭
+  hideCtxMenu();
+
+  const cm = document.getElementById('cellMenu');
+  if (cm && cm.contains(e.target)) return;
+  hideCellMenu();
+});
+document.addEventListener('scroll', () => { hideCtxMenu(); hideCellMenu(); }, true);
+window.addEventListener('resize', () => { hideCtxMenu(); hideCellMenu(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { hideCtxMenu(); hideCellMenu(); }
+});
+
+/* ---------------- 活动标题 ---------------- */
+const DEFAULT_TITLE = '评分表';
+
+function renderTitle() {
+  const el = document.getElementById('titleText');
+  if (el) el.textContent = state.title || DEFAULT_TITLE;
+  const inp = document.getElementById('titleInput');
+  if (inp) inp.value = state.title || '';
+}
+
+function focusTitleInput() {
+  const inp = document.getElementById('titleInput');
+  if (inp) {
+    inp.focus();
+    inp.select();
+    inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function onTitleInput() {
+  const v = document.getElementById('titleInput').value;
+  state.title = v;
+  save();
+  renderTitle();
+}
+
+function resetTitle() {
+  state.title = '';
+  document.getElementById('titleInput').value = '';
+  save();
+  renderTitle();
+  toast('已恢复默认标题');
+}
+
+/* ---------------- 工具 ---------------- */
+function esc(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ---------------- 启动 ---------------- */
+(function init() {
+  const hasData = load();
+
+  // 没有历史数据时，默认生成 20 行空表格
+  ensureDefaultRows();
+
+  // 同步规则控件
+  document.getElementById('aw1').value = state.awards.first || 0;
+  document.getElementById('aw2').value = state.awards.second || 0;
+  document.getElementById('aw3').value = state.awards.third || 0;
+  document.getElementById('chkDropHighLow').checked = !!state.dropHighLow;
+  document.getElementById('chkHasUnit').checked = !!state.hasUnit;
+  document.getElementById('chkHideScores').checked = !!state.hideScores;
+  document.body.classList.toggle('hide-scores', !!state.hideScores);
+
+  // 恢复抽签顺序勾选状态
+  document.getElementById('chkDrawOrder').checked = !!state.drawOrder;
+  const hlRow = document.querySelector('.highlight-row');
+  if (hlRow) hlRow.classList.toggle('active', !!state.drawOrder);
+
+  updateRuleButtons();
+  renderTitle();
+  renderHead();
+  renderBody();
+
+  // 导入框事件
+  const box = document.getElementById('importBox');
+  box.addEventListener('input', updateImportCount);
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      doImport();
+    }
+  });
+  updateImportCount();
+
+  if (hasData && state.rows.length) {
+    toast(`已恢复上次的 ${state.rows.length} 个节目`);
+  }
+})();
+</script>
+</body>
+</html>
