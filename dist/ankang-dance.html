@@ -1832,7 +1832,7 @@ function resetSettings() {
     '确定恢复？'
   )) return;
 
-  // ---- 1. 保存当前数据（按节目名匹配，保留分数）----
+  // ---- 1. 记录当前数据：按节目名匹配 + 按位置兜底 ----
   const currentByName = {};
   state.rows.forEach(r => {
     const k = (r.name || '').trim();
@@ -1841,6 +1841,15 @@ function resetSettings() {
       currentByName[k].push(r);
     }
   });
+
+  // 位置快照：即使节目名被改过，也能按位置找回分数
+  const currentByPos = state.rows.map(r => ({
+    name: (r.name || '').trim(),
+    actor: r.actor || '',
+    unit: r.unit || '',
+    scores: (r.scores || []).slice()
+  }));
+  const hasScore = s => (s || []).some(x => String(x === undefined || x === null ? '' : x).trim() !== '');
 
   // ---- 2. 恢复设置 ----
   state.maxScore = 10;
@@ -1858,17 +1867,34 @@ function resetSettings() {
     scores: false, avg: true, rank: true
   };
 
-  // ---- 3. 重建行：以预置节目单为准，保留匹配到的分数 ----
-  const used = {};   // 记录每个节目名已用掉几条（处理重名节目）
+  // ---- 3. 重建行：以预置节目单为准，尽量保留分数 ----
+  // 匹配优先级：①同名节目 → ②同位置且有分数（节目名被改过也能救回）
+  const usedCount = {};        // 同名节目用掉几条（处理重名）
+  const usedPos = new Set();   // 已占用的原始位置
+
   const newRows = PRESET_PROGRAMS.map((p, i) => {
     const k = p.name.trim();
     const pool = currentByName[k] || [];
-    used[k] = (used[k] || 0);
-    const matched = pool[used[k]];
-    used[k]++;
+    usedCount[k] = usedCount[k] || 0;
 
-    if (matched) {
-      // 保留原有分数和可能改过的文字
+    // ① 按名称找（跳过已被用掉的位置）
+    let matched = null;
+    let matchedPos = -1;
+    while (usedCount[k] < pool.length) {
+      const cand = pool[usedCount[k]];
+      const pos = currentByPos.findIndex((x, idx) =>
+        !usedPos.has(idx) && x.name === k && x.scores === cand.scores
+      );
+      usedCount[k]++;
+      if (pos >= 0) {
+        matched = cand;
+        matchedPos = pos;
+        break;
+      }
+    }
+
+    if (matched && matchedPos >= 0) {
+      usedPos.add(matchedPos);
       return {
         id: matched.id || uid(),
         no: i + 1,
@@ -1878,7 +1904,22 @@ function resetSettings() {
         scores: (matched.scores || []).slice(0, state.judgeCount)
       };
     }
-    // 被删掉的节目：补回来（分数为空）
+
+    // ② 名称没匹配上：同位置有分数就沿用（节目名被改过）
+    const posRow = currentByPos[i];
+    if (posRow && !usedPos.has(i) && hasScore(posRow.scores)) {
+      usedPos.add(i);
+      return {
+        id: uid(),
+        no: i + 1,
+        name: p.name,
+        actor: p.team,
+        unit: p.unit,
+        scores: posRow.scores.slice(0, state.judgeCount)
+      };
+    }
+
+    // ③ 真被删掉的节目：补回来，分数为空
     return {
       id: uid(),
       no: i + 1,
