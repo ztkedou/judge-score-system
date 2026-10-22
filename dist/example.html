@@ -634,7 +634,7 @@
       <label class="chk"><input type="checkbox" class="exp-col" data-col="actor" onchange="onExportColsChange()"> 表演团队</label>
       <label class="chk"><input type="checkbox" class="exp-col" data-col="unit" onchange="onExportColsChange()"> 选送单位</label>
       <label class="chk"><input type="checkbox" class="exp-col" data-col="scores" onchange="onExportColsChange()"> 评委打分</label>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="avg" onchange="onExportColsChange()"> 平均分</label>
+      <label class="chk"><input type="checkbox" class="exp-col" data-col="avg" onchange="onExportColsChange()"> <span id="expAvgLabel">平均分</span></label>
       <label class="chk exp-adjust-only"><input type="checkbox" class="exp-col" data-col="adjust" onchange="onExportColsChange()"> 分数修正</label>
       <label class="chk exp-adjust-only"><input type="checkbox" class="exp-col" data-col="final" onchange="onExportColsChange()"> 最终成绩</label>
       <label class="chk"><input type="checkbox" class="exp-col" data-col="rank" onchange="onExportColsChange()"> 名次</label>
@@ -1002,6 +1002,16 @@ function fmtScore(v, decimals) {
   return v.toFixed(decimals);
 }
 
+/* 序号显示值：
+   - 抽签模式下序号为空就显示空（不自动补行号）
+   - 非抽签模式下序号为空时，回退显示行号（兼容老数据） */
+function noDisplay(row, ri) {
+  const v = (row.no === undefined || row.no === null) ? '' : String(row.no).trim();
+  if (v !== '') return v;
+  if (state.drawOrder) return '';   // 抽签模式：保持空白
+  return ri + 1;
+}
+
 /* ---------------- 计算某行统计 ---------------- */
 function calcRow(row) {
   const vals = [];
@@ -1155,7 +1165,7 @@ function renderBody() {
 
     // 序号（固定列，不可删除，可手动改数字）
     const tdNo = makeInputTd(
-      'number', row.no === undefined || row.no === '' ? (ri + 1) : row.no,
+      'number', noDisplay(row, ri),
       v => { row.no = v; save(); },
       'cell no', 60 + ri * 100, 26
     );
@@ -3059,7 +3069,7 @@ function buildPrintTable() {
     html += '<tr>';
     cols.forEach(c => {
       if (c.key === 'no') {
-        html += `<td>${row.no === undefined || row.no === '' ? ri + 1 : esc(row.no)}</td>`;
+        html += `<td>${esc(noDisplay(row, ri))}</td>`;
       } else if (c.key === 'avg') {
         html += `<td>${st.avg === null ? '' : fmtScore(st.avg, state.decimals)}</td>`;
       } else if (c.key === 'adjust') {
@@ -3184,6 +3194,12 @@ function syncExportColsUI() {
       b.checked = (k === 'no' || k === 'name' || k === 'actor' || k === 'avg' || k === 'adjust' || k === 'final' || k === 'rank');
     }
   });
+
+  // 平均分勾选项的文字：不勾选分数修正时显示「最终成绩」
+  const avgLabel = document.getElementById('expAvgLabel');
+  if (avgLabel) {
+    avgLabel.textContent = state.showAdjust ? '平均分' : '最终成绩';
+  }
 
   // 「分数修正 / 最终成绩」只在开启分数修正时才有意义
   document.querySelectorAll('.exp-adjust-only').forEach(el => {
@@ -3321,7 +3337,7 @@ function exportExcel() {
     html += '<tr>';
     cols.forEach(c => {
       if (c.key === 'no') {
-        html += `<td>${row.no === undefined || row.no === '' ? ri + 1 : esc(row.no)}</td>`;
+        html += `<td>${esc(noDisplay(row, ri))}</td>`;
       } else if (c.key === 'avg') {
         const avgStr = st.avg === null ? '' : fmtScore(st.avg, state.decimals);
         html += `<td class="avg">${avgStr}</td>`;
@@ -3454,8 +3470,7 @@ function exportImage() {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#646a73';
         ctx.font = '13px "Microsoft YaHei", sans-serif';
-        ctx.fillText(String(row.no === undefined || row.no === '' ? ri + 1 : row.no),
-                     x + col.width / 2, y + rowH / 2);
+        ctx.fillText(noDisplay(row, ri), x + col.width / 2, y + rowH / 2);
 
       } else if (meta.key === 'avg') {
         ctx.textAlign = 'center';
