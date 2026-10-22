@@ -22,11 +22,18 @@
 
   .wrap { padding: 12px; }
 
-  /* ============ 活动标题栏（表格正上方）============ */
+  /* ============ 活动标题栏（表格正上方，吸顶）============ */
   .titlebar {
     background: #fff; border-radius: 8px 8px 0 0; padding: 14px 18px 12px;
     box-shadow: 0 -1px 3px rgba(0,0,0,.04), 0 1px 0 #eef0f4;
     margin-bottom: 0; text-align: center; border-bottom: 1px solid #e5e6eb;
+    /* 吸顶 */
+    position: sticky; top: 0; z-index: 20;
+  }
+  /* 页面滚动后标题栏加阴影，视觉上"浮"起来 */
+  .titlebar.stuck {
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    border-radius: 0;
   }
   .title-text {
     font-size: 22px; font-weight: 700; color: #1f2329;
@@ -145,13 +152,16 @@
 
   /* ============ 表格 ============ */
   .tablewrap {
-    background: #fff; border-radius: 8px; overflow: auto;
+    background: #fff; border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,.07); margin-bottom: 10px;
+    /* 用 visible 让内部表头 sticky 相对于页面生效 */
+    overflow: visible;
   }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th {
     background: #f7f8fa; font-weight: 600; color: #1f2329;
-    padding: 0; border: 1px solid #e5e6eb; position: sticky; top: 0; z-index: 3;
+    padding: 0; border: 1px solid #e5e6eb;
+    position: sticky; top: var(--titlebar-h, 56px); z-index: 10;
     white-space: nowrap;
   }
   thead th .th-inner {
@@ -849,9 +859,10 @@ function renderBody() {
       // 直接监听 input，简单可靠
       inp.addEventListener('input', commit);
       inp.addEventListener('blur', () => {
-        // 失焦时按小数位规范显示
-        const v = parseScore(row.scores[i], state.maxScore, state.decimals);
-        inp.value = (v === null) ? '' : fmtScore(v, state.decimals);
+        // 失焦：保持用户输入的原始值，不做格式化
+        // （小数位只影响平均分/最终成绩，不影响评委打分的显示）
+        const cur2 = row.scores[i];
+        inp.value = (cur2 === undefined || cur2 === null) ? '' : String(cur2);
       });
       // 聚焦时全选，方便直接覆盖
       inp.addEventListener('focus', () => {
@@ -965,7 +976,7 @@ function makeEmptyRow(no) {
 
 // 补齐到 20 行（只在没有真实数据时用）
 /* ============================================================
-   示例节目单（已脱敏，仅供演示格式）
+   本场活动固定节目单（可自行替换为实际节目）
    如需修改，直接改这里的数据即可
    ============================================================ */
 const PRESET_PROGRAMS = [
@@ -2641,7 +2652,11 @@ function exportExcel() {
         let cls = '';
         if (st.highest.includes(i)) cls = 'hi';
         else if (st.lowest.includes(i)) cls = 'lo';
-        html += `<td class="${cls}">${v === null ? '' : fmtScore(v, state.decimals)}</td>`;
+        // 评委分显示原始输入，不按小数位格式化
+        const rawScore = row.scores[i];
+        const showScore = (rawScore === undefined || rawScore === null || String(rawScore).trim() === '')
+          ? '' : String(rawScore);
+        html += `<td class="${cls}">${esc(showScore)}</td>`;
       } else {
         html += `<td>${esc(row[c.key] || '')}</td>`;
       }
@@ -2816,7 +2831,10 @@ function exportImage() {
           ctx.fillStyle = '#1f2329';
           ctx.font = '13px "Microsoft YaHei", sans-serif';
         }
-        if (v !== null) ctx.fillText(fmtScore(v, state.decimals), x + col.width / 2, y + rowH / 2);
+        // 评委分显示原始输入，不按小数位格式化
+        const rawS = row.scores[i];
+        const txtS = (rawS === undefined || rawS === null || String(rawS).trim() === '') ? '' : String(rawS);
+        if (txtS !== '') ctx.fillText(txtS, x + col.width / 2, y + rowH / 2);
 
       } else {
         // 文本列（左对齐）
@@ -3104,7 +3122,49 @@ function esc(s) {
   if (hasData && state.rows.length) {
     toast(`已恢复上次的 ${state.rows.length} 个节目`);
   }
+
+  // 初始化吸顶
+  setupStickyHeader();
 })();
+
+/* ============================================================
+   吸顶：标题栏 + 表头跟随滚动
+   ============================================================ */
+function setupStickyHeader() {
+  const bar = document.getElementById('titleBar');
+  if (!bar) return;
+
+  // 动态测量标题栏高度，写入 CSS 变量给表头用
+  function updateBarHeight() {
+    const h = bar.offsetHeight;
+    document.documentElement.style.setProperty('--titlebar-h', h + 'px');
+  }
+
+  updateBarHeight();
+  window.addEventListener('resize', updateBarHeight);
+  // 标题内容变化时高度可能变
+  const ti = document.getElementById('titleText');
+  if (ti) ti.addEventListener('input', () => setTimeout(updateBarHeight, 0));
+
+  // 滚动时给标题栏加阴影（表示已吸顶）
+  let ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const rect = bar.getBoundingClientRect();
+      // 标题栏顶部贴到视口顶部时算吸顶
+      const stuck = rect.top <= 1;
+      bar.classList.toggle('stuck', stuck);
+      // 滚动中也要保证高度正确
+      updateBarHeight();
+      ticking = false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
 </script>
 </body>
 </html>
