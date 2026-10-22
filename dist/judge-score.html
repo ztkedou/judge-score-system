@@ -389,7 +389,27 @@
     td.score.lowest  { background: #e8f7ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     td.avg { background: #f7f9ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .rank-tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* 打印时隐藏原表格，只显示打印专用表格 */
+    body.printing .wrap,
+    body.printing .topbar { display: none !important; }
+    #printTableWrap { display: block !important; }
   }
+
+  /* 打印专用表格（屏幕上隐藏） */
+  .print-only-wrap { display: none; }
+  .print-title {
+    font-size: 18px; font-weight: 700; text-align: center;
+    margin: 0 0 10px; padding-bottom: 6px; letter-spacing: 1px;
+  }
+  .print-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    font-family: "Microsoft YaHei", sans-serif;
+  }
+  .print-table th, .print-table td {
+    border: 1px solid #999; padding: 5px 6px; text-align: center;
+  }
+  .print-table th { background: #f0f2f5; font-weight: 600; }
 
   @media (max-width: 900px) {
     .wrap { padding: 8px; }
@@ -455,9 +475,9 @@
 
     <div class="btnrow">
       <span class="lbl">奖项名额</span>
-      <span class="field">第一名 <input type="number" id="aw1" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
-      <span class="field">第二名 <input type="number" id="aw2" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
-      <span class="field">第三名 <input type="number" id="aw3" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第Ⅰ名 <input type="number" id="aw1" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第Ⅱ名 <input type="number" id="aw2" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
+      <span class="field">第Ⅲ名 <input type="number" id="aw3" min="0" max="99" value="0" oninput="onAwardChange()"> 个</span>
       <span style="font-size:12px;color:#8f959e">（都填 0 = 不设奖项，直接按分数排名）</span>
     </div>
 
@@ -1377,7 +1397,7 @@ function refreshStats() {
       } else {
         const award = awardMap[row.id];
         if (award) {
-          const cls = award === '第一名' ? 'g1' : award === '第二名' ? 'g2' : 'g3';
+          const cls = award === '第Ⅰ名' ? 'g1' : award === '第Ⅱ名' ? 'g2' : 'g3';
           tdRank.innerHTML = `<span class="rank-tag ${cls}">${award}</span>`;
         } else {
           tdRank.innerHTML = `<span class="rank-tag plain">${rk}</span>`;
@@ -1388,7 +1408,7 @@ function refreshStats() {
 }
 
 /* ---------------- 奖项计算 ----------------
-   按排名分配：前 N1 个是第一名，接着 N2 个第二名，接着 N3 个第三名
+   按排名分配：前 N1 个是第Ⅰ名，接着 N2 个第Ⅱ名，接着 N3 个第Ⅲ名
    其余不显示奖项，只显示数字名次
 ------------------------------------------- */
 function computeAwards(rankMap) {
@@ -1404,13 +1424,13 @@ function computeAwards(rankMap) {
   const map = {};
   let idx = 0;
   for (let i = 0; i < first && idx < entries.length; i++, idx++) {
-    map[entries[idx].id] = '第一名';
+    map[entries[idx].id] = '第Ⅰ名';
   }
   for (let i = 0; i < second && idx < entries.length; i++, idx++) {
-    map[entries[idx].id] = '第二名';
+    map[entries[idx].id] = '第Ⅱ名';
   }
   for (let i = 0; i < third && idx < entries.length; i++, idx++) {
-    map[entries[idx].id] = '第三名';
+    map[entries[idx].id] = '第Ⅲ名';
   }
   return map;
 }
@@ -2852,12 +2872,80 @@ function resetSettings() {
 
 /* ---------------- 打印 ---------------- */
 function doPrint() {
-  applyPrintCols();       // 按勾选隐藏列
+  if (!getUsedRows().length) { toast('表格里还没有节目'); return; }
+
+  buildPrintTable();       // 生成打印专用的临时表格
   setTimeout(() => {
     window.print();
-    // 打印对话框关闭后恢复
-    setTimeout(clearPrintCols, 600);
-  }, 60);
+    setTimeout(removePrintTable, 600);
+  }, 80);
+}
+
+/* ============================================================
+   打印专用表格
+   直接生成一张新的 table，列顺序与导出一致
+   （名次 → 最终成绩 → 序号 → 文本列 → 评委 → 平均分 → 修正）
+   ============================================================ */
+function buildPrintTable() {
+  removePrintTable();
+
+  const cols = buildExportColumns();
+  if (!cols.length) { toast('没有勾选任何列'); return; }
+
+  const { rankMap } = computeRanks();
+  const awardMap = computeAwards(rankMap);
+  const usedRows = getUsedRows();
+  const titleText = state.title || DEFAULT_TITLE;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'printTableWrap';
+  wrap.className = 'print-only-wrap';
+
+  let html = `<div class="print-title">${esc(titleText)}</div>`;
+  html += '<table class="print-table"><thead><tr>';
+  cols.forEach(c => { html += `<th>${esc(c.label)}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  usedRows.forEach((row, ri) => {
+    const st = calcRow(row);
+    const rk = rankMap[row.id];
+    const award = awardMap[row.id];
+
+    html += '<tr>';
+    cols.forEach(c => {
+      if (c.key === 'no') {
+        html += `<td>${row.no === undefined || row.no === '' ? ri + 1 : esc(row.no)}</td>`;
+      } else if (c.key === 'avg') {
+        html += `<td>${st.avg === null ? '' : fmtScore(st.avg, state.decimals)}</td>`;
+      } else if (c.key === 'adjust') {
+        const a = st.adjust || 0;
+        html += `<td>${a === 0 ? '' : (a > 0 ? '+' + a : String(a))}</td>`;
+      } else if (c.key === 'final') {
+        html += `<td>${st.final === null ? '' : fmtScore(st.final, state.decimals)}</td>`;
+      } else if (c.key === 'rank') {
+        html += `<td>${award ? esc(award) : (rk || '')}</td>`;
+      } else if (c.scoreIdx !== undefined) {
+        const i = c.scoreIdx;
+        const rawS = row.scores[i];
+        const txtS = (rawS === undefined || rawS === null || String(rawS).trim() === '') ? '' : String(rawS);
+        html += `<td>${esc(txtS)}</td>`;
+      } else {
+        html += `<td>${esc(row[c.key] || '')}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap);
+  document.body.classList.add('printing');
+}
+
+function removePrintTable() {
+  const w = document.getElementById('printTableWrap');
+  if (w) w.remove();
+  document.body.classList.remove('printing');
 }
 
 /* ---------------- 打印：按勾选隐藏列 ---------------- */
@@ -2989,6 +3077,14 @@ function rebuildCustomExportCols() {
 function buildExportColumns() {
   const ec = state.exportCols || {};
   const cols = [];
+
+  // ===== 前两列：名次、最终成绩（最重要的结果放最前面）=====
+  if (ec.rank) cols.push({ key: 'rank', label: '名次', width: 82 });
+  if (state.showAdjust && ec.final) {
+    cols.push({ key: 'final', label: '最终成绩', width: 88 });
+  }
+
+  // ===== 然后：序号、文本列、评委分、平均分、分数修正 =====
   if (ec.no) cols.push({ key: 'no', label: '序号', width: 58 });
   state.textOrder.forEach(k => {
     if (ec[k]) {
@@ -3004,13 +3100,11 @@ function buildExportColumns() {
       cols.push({ key: 'score' + i, label: '评委' + (i + 1), width: 74, scoreIdx: i });
     }
   }
-  // 平均分 / 分数修正 / 最终成绩：各自独立勾选
   if (ec.avg) cols.push({ key: 'avg', label: '平均分', width: 88 });
-  if (state.showAdjust) {
-    if (ec.adjust) cols.push({ key: 'adjust', label: '分数修正', width: 82 });
-    if (ec.final) cols.push({ key: 'final', label: '最终成绩', width: 88 });
+  if (state.showAdjust && ec.adjust) {
+    cols.push({ key: 'adjust', label: '分数修正', width: 82 });
   }
-  if (ec.rank) cols.push({ key: 'rank', label: '名次', width: 82 });
+
   return cols;
 }
 
@@ -3240,8 +3334,8 @@ function exportImage() {
         ctx.textAlign = 'center';
         ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
         if (award) {
-          const bg = award === '第一名' ? '#fff3d6' : award === '第二名' ? '#eef1f6' : '#fbe9e2';
-          const fg = award === '第一名' ? '#a8701a' : award === '第二名' ? '#5a6474' : '#a45a2f';
+          const bg = award === '第Ⅰ名' ? '#fff3d6' : award === '第Ⅱ名' ? '#eef1f6' : '#fbe9e2';
+          const fg = award === '第Ⅰ名' ? '#a8701a' : award === '第Ⅱ名' ? '#5a6474' : '#a45a2f';
           ctx.fillStyle = bg;
           const tw = ctx.measureText(award).width + 14;
           ctx.fillRect(x + (col.width - tw) / 2, y + 8, tw, rowH - 16);
