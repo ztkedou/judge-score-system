@@ -10,6 +10,21 @@
 
 ---
 
+## 🌐 在线直接用（无需下载）
+
+**点下面链接，直接在浏览器里打开可用页面：**
+
+| 版本 | 在线地址 |
+|---|---|
+| **通用版** | **[▶ 立即试用](https://ztkedou.github.io/judge-score-system/dist/judge-score.html)** |
+| **带示例数据版** | **[▶ 立即试用](https://ztkedou.github.io/judge-score-system/dist/example.html)** |
+
+也可以访问 **[项目首页](https://ztkedou.github.io/judge-score-system/)** 查看界面截图和功能说明。
+
+> 在线版数据存在你当前浏览器里，换设备或清缓存会丢失。正式比赛建议下载到本机使用。
+
+---
+
 ## 为什么做这个
 
 用 Excel 统分，有两个绕不开的麻烦：
