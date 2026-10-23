@@ -13,10 +13,29 @@
   }
 
   /* ============ 顶部标题 ============ */
+  /* ============ 顶部标题栏 ============ */
   .topbar {
-    background: #1f2329; color: #fff; padding: 10px 18px;
+    background: #1f2329; color: #fff;
+    padding: 11px 20px;
     display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
   }
+  .topbar h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+  .topbar .sub {
+    font-size: 12px; font-weight: 400; color: #a8adb5;
+    margin-left: 8px; letter-spacing: 0;
+  }
+  .author-badge {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12.5px; color: #c3c7ce;
+  }
+  .author-badge b { color: #fff; font-weight: 600; }
+  .ab-made { white-space: nowrap; }
+  .ab-div {
+    width: 1px; height: 13px; background: #4a4f57;
+  }
+  .ab-contact { white-space: nowrap; }
+  .ab-contact b { color: #6ba3ff; }
   .topbar h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: .5px; }
   .topbar .sub { font-size: 12px; opacity: .6; margin-left: 10px; font-weight: 400; }
 
@@ -530,6 +549,11 @@
 
 <div class="topbar">
   <h1>评委打分统计系统 <span class="sub">完全离线 · 数据存本机</span></h1>
+  <div class="author-badge">
+    <span class="ab-made">制作人 <b>Fipken</b></span>
+    <span class="ab-div"></span>
+    <span class="ab-contact">如需定制或修改功能，请加 QQ <b>366093892</b></span>
+  </div>
 </div>
 
 <div class="wrap">
@@ -699,18 +723,6 @@
     <div class="import-hint">
       <b>用途</b>：赛前把节目单和规则配置好 → 导出设置文件 → 现场打开网页导入该文件 → 只需输入分数。<br>
       文件格式为 <b>.json</b>，可用记事本打开查看，不要手动改内容。
-    </div>
-  </div>
-
-  <!-- ================= 作者签名 ================= -->
-  <div class="panel no-print author-sign">
-    <div class="sign-main">
-      <span class="sign-ico">✎</span>
-      <span class="sign-label">制作人</span>
-      <span class="sign-name">Fipken</span>
-    </div>
-    <div class="sign-sub">
-      如需修改功能，请联系 <span class="sign-qq">QQ：366093892</span>
     </div>
   </div>
 
@@ -3374,8 +3386,6 @@ function exportExcel() {
     .fin { background: #f7f9ff; font-weight: bold; }
     .title-row td { border: none; font-size: 16pt; font-weight: bold; padding: 10px 0; text-align: center; }
   
-  /* ============ 作者签名 ============ */
-  .panel.author-sign {
     text-align: center !important;
     padding: 18px 20px;
     background: linear-gradient(180deg, #fafbfc 0%, #f4f6f9 100%);
