@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>评委打分统计系统 · 在线体验</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f5f7fa;
+    color: #1f2329;
+    line-height: 1.65;
+    padding: 40px 20px 60px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  /* 顶部 */
+  .hero {
+    background: linear-gradient(135deg, #1f2329 0%, #2c3440 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 38px 40px;
+    margin-bottom: 26px;
+    box-shadow: 0 6px 24px rgba(31,35,41,.18);
+  }
+  .hero h1 {
+    font-size: 30px; font-weight: 700; letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+  .hero .sub { font-size: 15px; color: #a8adb5; margin-bottom: 22px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 10px; }
+  .badge {
+    font-size: 12.5px; padding: 5px 12px; border-radius: 20px;
+    background: rgba(255,255,255,.11); color: #dde0e5;
+  }
+  .badge.on { background: #3370ff; color: #fff; }
+
+  /* 在线试用按钮 */
+  .try-area { margin-bottom: 26px; }
+  .try-btn {
+    display: block; text-align: center;
+    background: linear-gradient(135deg, #3370ff 0%, #245bdb 100%);
+    color: #fff; text-decoration: none;
+    font-size: 19px; font-weight: 700;
+    padding: 22px 20px;
+    border-radius: 12px;
+    box-shadow: 0 5px 18px rgba(51,112,255,.35);
+    transition: all .18s;
+    margin-bottom: 12px;
+  }
+  .try-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 9px 26px rgba(51,112,255,.45);
+  }
+  .try-btn small {
+    display: block; font-size: 13px; font-weight: 400;
+    opacity: .88; margin-top: 5px;
+  }
+  .try-btn.alt {
+    background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    box-shadow: 0 5px 18px rgba(74,85,104,.3);
+  }
+  .try-btn.alt:hover { box-shadow: 0 9px 26px rgba(74,85,104,.4); }
+
+  /* 卡片 */
+  .card {
+    background: #fff; border-radius: 12px;
+    padding: 26px 28px; margin-bottom: 22px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    border: 1px solid #e8ebef;
+  }
+  .card h2 {
+    font-size: 18px; font-weight: 700; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid #eef0f4;
+    color: #1f2329;
+  }
+  .shot {
+    width: 100%; border-radius: 8px;
+    border: 1px solid #e5e6eb;
+    box-shadow: 0 3px 14px rgba(0,0,0,.08);
+    display: block;
+  }
+
+  /* 功能网格 */
+  .grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  }
+  .item {
+    background: #f7f9fc; border-radius: 8px; padding: 14px 16px;
+    border-left: 3px solid #3370ff;
+  }
+  .item b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .item span { font-size: 12.8px; color: #646a73; }
+
+  /* 说明列表 */
+  .steps { counter-reset: s; }
+  .steps li {
+    list-style: none; position: relative;
+    padding-left: 34px; margin-bottom: 11px; font-size: 14.5px;
+  }
+  .steps li::before {
+    counter-increment: s; content: counter(s);
+    position: absolute; left: 0; top: 1px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #3370ff; color: #fff;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* 页脚 */
+  footer {
+    text-align: center; margin-top: 34px; padding-top: 22px;
+    border-top: 1px solid #e5e6eb;
+    font-size: 13px; color: #8f959e;
+  }
+  footer b { color: #3370ff; }
+
+  .note {
+    background: #fffbe6; border: 1px solid #ffe58f;
+    border-radius: 8px; padding: 13px 16px;
+    font-size: 13.2px; color: #7a5c00; margin-top: 14px;
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 20px 12px 40px; }
+    .hero { padding: 26px 22px; }
+    .hero h1 { font-size: 22px; }
+    .try-btn { font-size: 16px; padding: 18px 14px; }
+    .card { padding: 18px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="hero">
+    <h1>评委打分统计系统</h1>
+    <div class="sub">单文件离线 HTML · 双击即用 · 不装软件 · 不连网络</div>
+    <div class="badges">
+      <span class="badge on">100% 离线可用</span>
+      <span class="badge">零依赖</span>
+      <span class="badge">约 140 KB</span>
+      <span class="badge">数据存本机</span>
+      <span class="badge">支持手机横屏</span>
+    </div>
+  </div>
+
+  <div class="try-area">
+    <a class="try-btn" href="dist/judge-score.html">
+      ▶ 立即在线试用（通用版）
+      <small>点开直接是可用页面，可填分数、导出、打印</small>
+    </a>
+    <a class="try-btn alt" href="dist/example.html">
+      ▶ 带示例数据版
+      <small>已预置 12 个示例节目，方便看完整效果</small>
+    </a>
+  </div>
+
+  <div class="card">
+    <h2>界面预览（通用版）</h2>
+    <img class="shot" src="截图/通用版截图.png" alt="评委打分统计系统界面截图">
+  </div>
+
+  <div class="card">
+    <h2>界面预览（带示例数据版）</h2>
+    <img class="shot" src="截图/示例版截图.png" alt="示例数据版界面截图">
+  </div>
+
+  <div class="card">
+    <h2>主要功能</h2>
+    <div class="grid">
+      <div class="item"><b>分数手动输入</b><span>输什么就是什么，超满分自动标红提示，不会吞掉你的值</span></div>
+      <div class="item"><b>实时统计</b><span>最高分红框、最低分蓝框，平均分、最终成绩、名次实时算</span></div>
+      <div class="item"><b>同分并列</b><span>两个节目同分，名次自动并列，不错判</span></div>
+      <div class="item"><b>去掉最高最低</b><span>可选规则，自动剔除一个最高分和一个最低分</span></div>
+      <div class="item"><b>分数修正</b><span>可加可减，最终成绩 = 平均分 + 修正，排名按最终成绩</span></div>
+      <div class="item"><b>现场抽签</b><span>勾选后清空序号，现场抽签手填，填完一键排序</span></div>
+      <div class="item"><b>自定义列</b><span>可增加「编导」「伴奏」等任意列，最多 6 个</span></div>
+      <div class="item"><b>撤销重做</b><span>Ctrl+Z / Ctrl+Y，步数不设上限，防手滑</span></div>
+      <div class="item"><b>全套快捷键</b><span>32 条快捷键，参照 Word 习惯，按 F1 查看</span></div>
+      <div class="item"><b>便捷导入</b><span>从 Excel / Word 直接粘贴，自动识别 6 种分隔符</span></div>
+      <div class="item"><b>三种导出</b><span>导出 Excel、导出图片、打印，自动去空行</span></div>
+      <div class="item"><b>设置存档</b><span>赛前配好导出 json，现场导入直接开打</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>怎么用</h2>
+    <ol class="steps">
+      <li>点上面的「立即在线试用」，或从仓库下载 HTML 文件</li>
+      <li>粘贴节目名单（支持从 Excel / Word 直接复制）</li>
+      <li>评委填分数，系统自动算平均分和名次</li>
+      <li>比赛结束点「分数排序」，按最终成绩排名</li>
+      <li>点「导出 Excel」或「打印结果」交付</li>
+      <li>赛前记得点「导出比赛设置」或按 Ctrl+S 备份</li>
+    </ol>
+    <div class="note">
+      <b>提示</b>：在线试用时数据存在你的浏览器里，换设备或清缓存会丢失。
+      正式比赛建议下载到本机使用，并做一份「比赛设置」备份。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>下载</h2>
+    <div class="grid">
+      <div class="item">
+        <b><a href="dist/judge-score.html" download>下载通用版 HTML</a></b>
+        <span>空白 20 行，任何比赛都能用</span>
+      </div>
+      <div class="item">
+        <b><a href="dist/example.html" download>下载示例版 HTML</a></b>
+        <span>预置 12 个示例节目，可参考格式</span>
+      </div>
+      <div class="item">
+        <b><a href="docs/开发文档.md">查看开发文档</a></b>
+        <span>技术细节、修改指南、踩坑记录</span>
+      </div>
+      <div class="item">
+        <b><a href="README.md">查看完整说明</a></b>
+        <span>功能详解、快捷键表、常见问题</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    制作人 <b>Fipken</b> · 如需定制或修改功能，请加 QQ <b>366093892</b>
+    <br>
+    <span style="font-size:12px">MIT License · 随便用、随便改、随便分发</span>
+  </footer>
+
+</div>
+</body>
+</html>
