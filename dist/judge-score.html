@@ -702,6 +702,19 @@
     </div>
   </div>
 
+  <!-- ================= 作者签名 ================= -->
+  <div class="panel no-print author-sign">
+    <div class="sign-main">
+      <span class="sign-ico">✎</span>
+      <span class="sign-label">制作人</span>
+      <span class="sign-name">Fipken</span>
+    </div>
+    <div class="sign-sub">
+      如需修改功能，请联系 <span class="sign-qq">QQ：366093892</span>
+    </div>
+  </div>
+
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -754,7 +767,7 @@ let state = {
   hideScores: false,     // 隐藏评委打分
   dropHighLow: false,    // 去掉最高最低
   drawOrder: false,      // 现场抽签顺序（导入不自动填序号）
-  showAdjust: true,      // 显示「分数修正 / 最终成绩」两列（本示例默认开）
+  showAdjust: false,     // 显示「分数修正 / 最终成绩」两列（通用版默认关）
   awards: { first: 0, second: 0, third: 0 },
   textOrder: ['name', 'actor'],   // 节目名称 / 演出人员
   customCols: [],        // 自定义列 [{key, label}]
@@ -2931,12 +2944,12 @@ function resetSettings() {
   state.maxScore = 10;
   state.decimals = 2;
   state.judgeCount = 5;
-  state.hasUnit = true;
-  state.textOrder = ['name', 'actor', 'unit'];
+  state.hasUnit = false;
+  state.textOrder = ['name', 'actor'];
   state.hideScores = false;
   state.dropHighLow = false;
   state.drawOrder = false;
-  state.showAdjust = true;      // 本示例默认开启
+  state.showAdjust = false;     // 通用版默认关闭
   state.awards = { first: 0, second: 0, third: 0 };
   state.title = '';
   state.exportCols = {
@@ -3085,7 +3098,21 @@ function buildPrintTable() {
   wrap.className = 'print-only-wrap';
 
   let html = `<div class="print-title">${esc(titleText)}</div>`;
-  html += '<table class="print-table"><thead><tr>';
+  html += '<table class="print-table"><colgroup>';
+  // 按列类型分配宽度：数字列窄，文字列宽
+  cols.forEach(c => {
+    let w = '';
+    if (c.key === 'rank')       w = '6%';
+    else if (c.key === 'final') w = '9%';
+    else if (c.key === 'avg')   w = '9%';
+    else if (c.key === 'adjust')w = '8%';
+    else if (c.key === 'no')    w = '5%';
+    else if (c.scoreIdx !== undefined) w = '8%';
+    else if (c.key === 'name')  w = '31%';
+    else w = '20%';
+    html += `<col style="width:${w}">`;
+  });
+  html += '</colgroup><thead><tr>';
   cols.forEach(c => { html += `<th>${esc(c.label)}</th>`; });
   html += '</tr></thead><tbody>';
 
@@ -3346,7 +3373,40 @@ function exportExcel() {
     .adj { background: #fffbf0; color: #b8791a; font-weight: bold; }
     .fin { background: #f7f9ff; font-weight: bold; }
     .title-row td { border: none; font-size: 16pt; font-weight: bold; padding: 10px 0; text-align: center; }
-  </style></head><body><table>`;
+  
+  /* ============ 作者签名 ============ */
+  .panel.author-sign {
+    text-align: center !important;
+    padding: 18px 20px;
+    background: linear-gradient(180deg, #fafbfc 0%, #f4f6f9 100%);
+    border: 1px solid #e5e6eb;
+  }
+  .panel.author-sign .sign-main {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-bottom: 8px;
+    justify-content: center;
+  }
+  .panel.author-sign .sign-sub {
+    text-align: center;
+  }
+  .sign-ico {
+    font-size: 16px; color: #3370ff;
+  }
+  .sign-label {
+    font-size: 13px; color: #646a73;
+  }
+  .sign-name {
+    font-size: 16px; font-weight: 700; color: #1f2329;
+    letter-spacing: .5px;
+  }
+  .sign-sub {
+    font-size: 12.5px; color: #8f959e;
+  }
+  .sign-qq {
+    color: #3370ff; font-weight: 600;
+  }
+
+</style></head><body><table>`;
 
   // 活动题目（跨整行，无边框）
   html += `<tr class="title-row"><td colspan="${totalCols}">${esc(titleText)}</td></tr>`;
