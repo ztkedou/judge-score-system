@@ -622,6 +622,34 @@ td.adjust .adj-input {
     padding: 4px 0 !important;
     box-sizing: border-box !important;
   }
+  /* ============ 节目计时 ============ */
+  td.timer-cell {
+    padding: 3px 6px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .timer-wrap {
+    display: flex; align-items: center; gap: 5px;
+    justify-content: center;
+  }
+  .timer-display {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 14px; font-weight: 700;
+    color: #1f2329;
+    min-width: 48px;
+    font-variant-numeric: tabular-nums;
+  }
+  .timer-btn {
+    font-size: 11.5px; padding: 3px 8px;
+    border-radius: 4px; cursor: pointer;
+    border: 1px solid #d9dde3; background: #fff;
+    white-space: nowrap;
+  }
+  .timer-btn:hover { border-color: #3370ff; color: #3370ff; }
+  .timer-start { color: #0f7b3f; border-color: #a8d5ba; }
+  .timer-start:hover { background: #f0faf4; border-color: #0f7b3f; }
+  .timer-stop { color: #d03050; border-color: #f0b8c2; }
+  .timer-stop:hover { background: #fff1f3; border-color: #d03050; }
 </style>
 </head>
 <body>
@@ -701,6 +729,7 @@ td.adjust .adj-input {
       <label class="chk"><input type="checkbox" id="chkHasUnit" onchange="onHasUnitChange()"> 有选送单位</label>
       <label class="chk"><input type="checkbox" id="chkHideScores" onchange="onHideScoresChange()"> 隐藏评委打分</label>
       <label class="chk"><input type="checkbox" id="chkShowAdjust" onchange="onShowAdjustChange()"> 分数修正 / 最终成绩</label>
+      <label class="chk"><input type="checkbox" id="chkShowTimer" onchange="onShowTimerChange()"> 节目计时</label>
     </div>
 
     <!-- 自定义列 -->
@@ -858,6 +887,7 @@ let state = {
   dropHighLow: false,    // 去掉最高最低
   drawOrder: false,      // 现场抽签顺序（导入不自动填序号）
   showAdjust: false,      // 显示「分数修正 / 最终成绩」两列（本示例默认开）
+  showTimer: false,      // 节目计时列（默认不勾选）
   awards: { first: 0, second: 0, third: 0 },
   textOrder: ['name', 'actor'],   // 节目名称 / 演出人员
   customCols: [],        // 自定义列 [{key, label}]
@@ -993,6 +1023,7 @@ function syncAllUI() {
   chk('chkHasUnit', state.hasUnit);
   chk('chkHideScores', state.hideScores);
   chk('chkShowAdjust', state.showAdjust);
+  chk('chkShowTimer', !!state.showTimer);
   chk('chkDrawOrder', state.drawOrder);
   document.body.classList.toggle('hide-scores', !!state.hideScores);
 
@@ -1291,6 +1322,11 @@ function renderHead() {
   // 名次
   html += `<th style="width:74px"><div class="th-inner">名次</div></th>`;
 
+  // 节目计时（勾选时才显示，放最后一列）
+  if (state.showTimer) {
+    html += `<th style="width:170px" class="timer-col"><div class="th-inner">节目计时</div></th>`;
+  }
+
   tr.innerHTML = html;
 }
 
@@ -1542,6 +1578,15 @@ function renderBody() {
     const tdRank = document.createElement('td');
     tdRank.className = 'rank';
     tr.appendChild(tdRank);
+
+    // 节目计时（勾选时才显示）
+    if (state.showTimer) {
+      const tdTimer = document.createElement('td');
+      tdTimer.className = 'timer-cell';
+      tdTimer.dataset.rid = row.id;
+      buildTimerCell(tdTimer, row);
+      tr.appendChild(tdTimer);
+    }
 
     tbody.appendChild(tr);
   });
@@ -3076,6 +3121,7 @@ function resetSettings() {
   state.dropHighLow = false;
   state.drawOrder = false;
   state.showAdjust = false;      // 本示例默认开启
+  state.showTimer = false;      // 默认不开启节目计时
   state.awards = { first: 0, second: 0, third: 0 };
   state.title = '';
   state.exportCols = {
@@ -4216,6 +4262,199 @@ function setupStickyHeader() {
   onScroll();
 }
 
+
+/* ============================================================
+   节目计时（2026-10-24）
+   每行一个独立计时器：开始/暂停 → 停止 → 弹窗可改 → 确认入格
+   ============================================================ */
+
+
+/* 秒 → mm:ss 或 hh:mm:ss */
+function fmtTimer(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+/* 构建一个计时单元格 */
+function buildTimerCell(td, row) {
+  td.innerHTML = '';
+
+  // 如果已有保存的时长，显示为文字（点击可重新计时）
+  const saved = row.timer;
+  const hasSaved = saved !== undefined && saved !== null && String(saved).trim() !== '';
+
+  if (hasSaved) {
+    const span = document.createElement('span');
+    span.className = 'timer-result';
+    span.textContent = String(saved);
+    span.title = '点击重新计时';
+    span.onclick = () => {
+      if (confirm(`当前记录：${saved}\n\n重新计时会覆盖它，继续吗？`)) {
+        row.timer = '';
+        save();
+        buildTimerCell(td, row);
+      }
+    };
+    td.appendChild(span);
+    return;
+  }
+
+  // 未计时：显示 开始/暂停 + 停止
+  const wrap = document.createElement('div');
+  wrap.className = 'timer-wrap';
+
+  const display = document.createElement('span');
+  display.className = 'timer-display';
+  display.textContent = '00:00';
+
+  const btnStart = document.createElement('button');
+  btnStart.className = 'timer-btn timer-start';
+  btnStart.textContent = '▶ 开始';
+  btnStart.title = '开始计时';
+
+  const btnStop = document.createElement('button');
+  btnStop.className = 'timer-btn timer-stop';
+  btnStop.textContent = '■ 停止';
+  btnStop.title = '停止并记录';
+
+  // 初始化状态（惰性，避免 TDZ）
+  if (typeof window.__timerState === 'undefined') window.__timerState = {};
+  if (!window.__timerState[row.id]) {
+    window.__timerState[row.id] = { running: false, elapsed: 0, startTs: 0, intervalId: null };
+  }
+  const st = window.__timerState[row.id];
+  display.textContent = fmtTimer(st.elapsed);
+  if (st.running) {
+    btnStart.textContent = '⏸ 暂停';
+    btnStart.title = '暂停计时';
+  }
+
+  const updateDisplay = () => {
+    const cur = window.__timerState[row.id];
+    const total = cur.running
+      ? cur.elapsed + (Date.now() - cur.startTs) / 1000
+      : cur.elapsed;
+    display.textContent = fmtTimer(total);
+  };
+
+  btnStart.onclick = () => {
+    const cur = window.__timerState[row.id];
+    if (cur.running) {
+      // 暂停
+      cur.elapsed += (Date.now() - cur.startTs) / 1000;
+      cur.running = false;
+      clearInterval(cur.intervalId);
+      cur.intervalId = null;
+      btnStart.textContent = '▶ 继续';
+      btnStart.title = '继续计时';
+      updateDisplay();
+    } else {
+      // 开始 / 继续
+      cur.running = true;
+      cur.startTs = Date.now();
+      cur.intervalId = setInterval(updateDisplay, 200);
+      btnStart.textContent = '⏸ 暂停';
+      btnStart.title = '暂停计时';
+    }
+  };
+
+  btnStop.onclick = () => {
+    const cur = window.__timerState[row.id];
+    if (cur.running) {
+      cur.elapsed += (Date.now() - cur.startTs) / 1000;
+      cur.running = false;
+      clearInterval(cur.intervalId);
+      cur.intervalId = null;
+    }
+    const total = Math.floor(cur.elapsed);
+    showTimerDialog(row, total, td);
+  };
+
+  wrap.appendChild(display);
+  wrap.appendChild(btnStart);
+  wrap.appendChild(btnStop);
+  td.appendChild(wrap);
+}
+
+/* 停止后弹窗：可修改，确认入格 */
+function showTimerDialog(row, seconds, td) {
+  const modal = document.getElementById('timerModal');
+  const input = document.getElementById('timerInput');
+  if (!modal || !input) return;
+
+  input.value = fmtTimer(seconds);
+  modal.dataset.rid = row.id;
+  modal.classList.add('show');
+
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+}
+
+/* 确认计时结果 */
+function confirmTimer() {
+  const modal = document.getElementById('timerModal');
+  const input = document.getElementById('timerInput');
+  if (!modal || !input) return;
+
+  const rid = modal.dataset.rid;
+  const val = input.value.trim();
+  if (!val) { toast('请填写时间'); return; }
+
+  const row = state.rows.find(r => r.id === rid);
+  if (!row) return;
+
+  row.timer = val;
+  save();
+
+  // 重置计时状态
+  if (window.__timerState && window.__timerState[rid]) {
+    if (window.__timerState[rid].intervalId) clearInterval(window.__timerState[rid].intervalId);
+    delete window.__timerState[rid];
+  }
+
+  modal.classList.remove('show');
+
+  // 重新渲染这一格
+  const tr = document.querySelector(`tr[data-rid="${rid}"]`);
+  if (tr) {
+    const td = tr.querySelector('td.timer-cell');
+    if (td) buildTimerCell(td, row);
+  }
+  toast(`已记录：${val}`);
+}
+
+/* 取消计时 */
+function cancelTimer() {
+  const modal = document.getElementById('timerModal');
+  if (modal) modal.classList.remove('show');
+}
+
+/* 勾选/取消节目计时 */
+function onShowTimerChange() {
+  const box = document.getElementById('chkShowTimer');
+  state.showTimer = box.checked;
+  save();
+  renderHead();
+  renderBody();
+  syncExportColsUI();
+  toast(state.showTimer ? '已显示节目计时列' : '已隐藏节目计时列');
+}
 </script>
+
+<!-- 节目计时弹窗 -->
+<div class="timer-modal" id="timerModal">
+  <div class="timer-dialog">
+    <div class="timer-dialog-title">节目计时结果</div>
+    <div class="timer-dialog-hint">可以修改，格式 mm:ss 或 hh:mm:ss</div>
+    <input type="text" id="timerInput" class="timer-dialog-input" placeholder="00:00">
+    <div class="timer-dialog-btns">
+      <button class="primary" onclick="confirmTimer()">确认</button>
+      <button onclick="cancelTimer()">取消</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
