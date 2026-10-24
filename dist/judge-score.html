@@ -3518,109 +3518,267 @@ function getUsedRows() {
    生成 HTML 表格格式的 .xls，Excel/WPS 都能打开
    只导出勾选的列
 ------------------------------------------- */
+/* ---------------- 导出真 xlsx（微信可直接预览）---------------- */
+/* 纯前端生成 OOXML，不依赖外部库 */
+function makeXlsxBlob(sheets) {
+  // sheets: [{name, rows:[[cell,...],...]}]  cell = {v:值, t:'s'|'n', style:索引}
+  const enc = new TextEncoder();
+
+  // ---- ZIP 写入器（store 模式，不压缩）----
+  function crc32(buf) {
+    let c, crc = 0xFFFFFFFF;
+    for (let i = 0; i < buf.length; i++) {
+      c = (crc ^ buf[i]) & 0xFF;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      crc = (crc >>> 8) ^ c;
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  const files = [];
+  function addFile(name, content) {
+    const data = typeof content === 'string' ? enc.encode(content) : content;
+    files.push({ name: enc.encode(name), data, crc: crc32(data) });
+  }
+
+  // 生成每个 sheet 的 XML
+  function cellXml(cell, r, c) {
+    if (!cell || cell.v === undefined || cell.v === null || cell.v === '') {
+      return `<c r="${colName(c)}${r}"${cell && cell.style ? ` s="${cell.style}"` : ''}/>`;
+    }
+    const ref = `${colName(c)}${r}`;
+    const s = cell.style ? ` s="${cell.style}"` : '';
+    if (cell.t === 'n' && !isNaN(Number(cell.v))) {
+      return `<c r="${ref}"${s}><v>${Number(cell.v)}</v></c>`;
+    }
+    // 字符串：inlineStr 避免 sharedStrings
+    const escaped = String(cell.v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/\n/g, '&#10;');
+    return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${escaped}</t></is></c>`;
+  }
+
+  function colName(n) {
+    let s = '';
+    n = n + 1;
+    while (n > 0) {
+      const m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
+  }
+
+  const sheetXmls = sheets.map(sh => {
+    let rows = '';
+    sh.rows.forEach((row, ri) => {
+      const r = ri + 1;
+      let cells = '';
+      row.forEach((cell, ci) => { cells += cellXml(cell, r, ci); });
+      rows += `<row r="${r}">${cells}</row>`;
+    });
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData>${rows}</sheetData></worksheet>`;
+  });
+
+  // [Content_Types].xml
+  addFile('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n')}
+</Types>`);
+
+  // _rels/.rels
+  addFile('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`);
+
+  // xl/workbook.xml
+  addFile('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>${sheets.map((s,i)=>`<sheet name="${String(s.name).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets>
+</workbook>`);
+
+  // xl/_rels/workbook.xml.rels
+  addFile('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}
+<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`);
+
+  // xl/styles.xml（简单样式：0=默认 1=表头 2=标题 3=最高分 4=最低分 5=平均分 6=最终）
+  addFile('xl/styles.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="7">
+<font><sz val="11"/><name val="Microsoft YaHei"/></font>
+<font><b/><sz val="11"/><name val="Microsoft YaHei"/></font>
+<font><b/><sz val="16"/><name val="Microsoft YaHei"/></font>
+<font><b/><sz val="11"/><color rgb="FFC00000"/><name val="Microsoft YaHei"/></font>
+<font><b/><sz val="11"/><color rgb="FF0066CC"/><name val="Microsoft YaHei"/></font>
+<font><b/><sz val="11"/><color rgb="FF3370FF"/><name val="Microsoft YaHei"/></font>
+<font><b/><sz val="11"/><name val="Microsoft YaHei"/></font>
+</fonts>
+<fills count="7">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF0F0F0"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFE0E0"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFDDF0FF"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF5F8FF"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFFBF0"/><bgColor indexed="64"/></patternFill></fill>
+</fills>
+<borders count="2">
+<border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color rgb="FF999999"/></left><right style="thin"><color rgb="FF999999"/></right><top style="thin"><color rgb="FF999999"/></top><bottom style="thin"><color rgb="FF999999"/></bottom><diagonal/></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="7">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="6" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+</cellXfs>
+</styleSheet>`);
+
+  // 各 sheet
+  sheets.forEach((s, i) => addFile(`xl/worksheets/sheet${i+1}.xml`, sheetXmls[i]));
+
+  // ---- 组装 ZIP ----
+  const parts = [];
+  let offset = 0;
+  const central = [];
+
+  files.forEach(f => {
+    const nameLen = f.name.length;
+    const local = new Uint8Array(30 + nameLen + f.data.length);
+    const dv = new DataView(local.buffer);
+    dv.setUint32(0, 0x04034b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 0, true);
+    dv.setUint16(8, 0, true);
+    dv.setUint16(10, 0, true);
+    dv.setUint16(12, 0, true);
+    dv.setUint32(14, f.crc, true);
+    dv.setUint32(18, f.data.length, true);
+    dv.setUint32(22, f.data.length, true);
+    dv.setUint16(26, nameLen, true);
+    dv.setUint16(28, 0, true);
+    local.set(f.name, 30);
+    local.set(f.data, 30 + nameLen);
+    parts.push(local);
+
+    const cen = new Uint8Array(46 + nameLen);
+    const cv = new DataView(cen.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, 0, true);
+    cv.setUint16(14, 0, true);
+    cv.setUint32(16, f.crc, true);
+    cv.setUint32(20, f.data.length, true);
+    cv.setUint32(24, f.data.length, true);
+    cv.setUint16(28, nameLen, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    cen.set(f.name, 46);
+    central.push(cen);
+
+    offset += local.length;
+  });
+
+  const cenStart = offset;
+  let cenSize = 0;
+  central.forEach(c => { parts.push(c); cenSize += c.length; });
+
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cenSize, true);
+  ev.setUint32(16, cenStart, true);
+  parts.push(end);
+
+  return new Blob(parts, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+/* 导出 xlsx（微信/手机可直接预览） */
 function exportExcel() {
   if (!state.rows.length) { toast('没有数据可导出'); return; }
 
   const cols = buildExportColumns();
   if (!cols.length) { toast('没有勾选任何列'); return; }
 
-  // 只导出有内容的行，去掉没用的空行
   const usedRows = getUsedRows();
   if (!usedRows.length) { toast('表格里还没有节目'); return; }
 
   const { rankMap } = computeRanks();
   const awardMap = computeAwards(rankMap);
-
-  const totalCols = cols.length;
   const titleText = state.title || DEFAULT_TITLE;
 
-  let html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8">
-  <style>
-    table { border-collapse: collapse; font-family: "Microsoft YaHei"; }
-    th, td { border: 1px solid #999; padding: 5px 8px; text-align: center; font-size: 11pt; }
-    th { background: #f0f0f0; font-weight: bold; }
-    .hi { background: #ffe0e0; color: #c00; font-weight: bold; }
-    .lo { background: #ddf0ff; color: #06c; font-weight: bold; }
-    .avg { background: #f5f8ff; font-weight: bold; color: #3370ff; }
-    .adj { background: #fffbf0; color: #b8791a; font-weight: bold; }
-    .fin { background: #f7f9ff; font-weight: bold; }
-    .title-row td { border: none; font-size: 16pt; font-weight: bold; padding: 10px 0; text-align: center; }
-  
-  td.adjust .adj-input {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    text-align: center;
-    font-size: 12.5px;
-    padding: 4px 2px;
-    box-sizing: border-box;
-  }
-  td.adjust .adj-input[data-kind="plus"] {
-    color: #d03050;
-  }
-  td.adjust .adj-input[data-kind="minus"] {
-    color: #1a7fd4;
-  }
-  td.adjust .adj-input::placeholder {
-    color: #c0c4cc;
-    font-weight: 400;
-  }
+  const rows = [];
 
-</style></head><body><table>`;
+  // 标题行（合并效果：只在第一格写，样式用标题）
+  rows.push([{ v: titleText, t: 's', style: 2 }]);
 
-  // 活动题目（跨整行，无边框）
-  html += `<tr class="title-row"><td colspan="${totalCols}">${esc(titleText)}</td></tr>`;
+  // 表头
+  rows.push(cols.map(c => ({ v: c.label, t: 's', style: 1 })));
 
-  // 表头行
-  html += '<tr>';
-  cols.forEach(c => { html += `<th>${esc(c.label)}</th>`; });
-  html += '</tr>';
-
-  // 数据行（只含有内容的行）
+  // 数据行
   usedRows.forEach((row, ri) => {
     const st = calcRow(row);
     const rk = rankMap[row.id];
     const award = awardMap[row.id];
 
-    html += '<tr>';
-    cols.forEach(c => {
+    const line = cols.map(c => {
       if (c.key === 'no') {
-        html += `<td>${esc(noDisplay(row, ri))}</td>`;
+        return { v: noDisplay(row, ri), t: 's', style: 6 };
       } else if (c.key === 'avg') {
-        const avgStr = st.avg === null ? '' : fmtScore(st.avg, state.decimals);
-        html += `<td class="avg">${avgStr}</td>`;
+        return { v: st.avg === null ? '' : fmtScore(st.avg, state.decimals), t: 's', style: 5 };
       } else if (c.key === 'adjust') {
         const a = st.adjust || 0;
-        html += `<td class="adj">${a === 0 ? '' : (a > 0 ? '+' + a : String(a))}</td>`;
+        return { v: a === 0 ? '' : (a > 0 ? '+' + a : String(a)), t: 's', style: 6 };
       } else if (c.key === 'final') {
-        const fStr = st.final === null ? '' : fmtScore(st.final, state.decimals);
-        html += `<td class="fin">${fStr}</td>`;
+        return { v: st.final === null ? '' : fmtScore(st.final, state.decimals), t: 's', style: 5 };
       } else if (c.key === 'rank') {
-        html += `<td>${award ? award : (rk || '')}</td>`;
+        return { v: award ? award : (rk || ''), t: 's', style: 6 };
+      } else if (c.key === 'timer') {
+        return { v: row.timer || '', t: 's', style: 6 };
       } else if (c.scoreIdx !== undefined) {
         const i = c.scoreIdx;
-        const v = parseScore(row.scores[i], state.maxScore, state.decimals);
-        let cls = '';
-        if (st.highest.includes(i)) cls = 'hi';
-        else if (st.lowest.includes(i)) cls = 'lo';
-        // 评委分显示原始输入，不按小数位格式化
         const rawScore = row.scores[i];
         const showScore = (rawScore === undefined || rawScore === null || String(rawScore).trim() === '')
           ? '' : String(rawScore);
-        html += `<td class="${cls}">${esc(showScore)}</td>`;
+        let style = 6;
+        if (st.highest.includes(i)) style = 3;
+        else if (st.lowest.includes(i)) style = 4;
+        return { v: showScore, t: 's', style };
       } else {
-        html += `<td>${esc(row[c.key] || '')}</td>`;
+        return { v: row[c.key] || '', t: 's', style: 6 };
       }
     });
-    html += '</tr>';
+    rows.push(line);
   });
 
-  html += '</table></body></html>';
-
-  const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-  downloadBlob(blob, `评分表_${stamp()}.xls`);
-  toast(`已导出 Excel（${usedRows.length} 行 · ${cols.length} 列）`);
+  const blob = makeXlsxBlob([{ name: '统分表', rows }]);
+  downloadBlob(blob, `评分表_${stamp()}.xlsx`);
+  toast(`已导出 Excel（${usedRows.length} 行 · ${cols.length} 列，微信可直接预览）`);
 }
+
 
 /* ---------------- 导出图片（Canvas 手绘）---------------- */
 function exportImage() {
@@ -3684,12 +3842,15 @@ function exportImage() {
   ctx.lineWidth = 1;
 
   let x = startX;
-  ctx.fillStyle = '#1f2329';
   ctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
   ctx.textAlign = 'center';
   cols.forEach(c => {
+    // 先填浅色背景，再画边框，最后写字
+    ctx.fillStyle = '#f0f2f5';
     ctx.fillRect(x, y, c.width, headH);
+    ctx.strokeStyle = '#c9cdd4';
     ctx.strokeRect(x + .5, y + .5, c.width, headH);
+    ctx.fillStyle = '#1f2329';
     ctx.fillText(c.title, x + c.width / 2, y + headH / 2);
     x += c.width;
   });
