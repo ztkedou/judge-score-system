@@ -647,7 +647,41 @@ td.adjust .adj-input {
   .timer-start:hover { background: #f0faf4; border-color: #0f7b3f; }
   .timer-stop { color: #d03050; border-color: #f0b8c2; }
   .timer-stop:hover { background: #fff1f3; border-color: #d03050; }
-</style>
+  /* ============ 导出列顺序调整 ============ */
+  .exp-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: #fff;
+    border: 1px solid #e5e6eb;
+    border-radius: 6px;
+    padding: 2px 4px 2px 6px;
+    margin: 2px 3px;
+  }
+  .exp-item .chk {
+    padding: 2px 2px;
+    margin: 0;
+  }
+  .exp-item .exp-move {
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 5px;
+    border: 1px solid #d9dde3;
+    border-radius: 3px;
+    background: #fafbfc;
+    color: #646a73;
+    cursor: pointer;
+    min-width: 22px;
+  }
+  .exp-item .exp-move:hover:not(:disabled) {
+    background: #e8f0ff;
+    border-color: #3370ff;
+    color: #3370ff;
+  }
+  .exp-item .exp-move:disabled {
+    opacity: .25;
+    cursor: not-allowed;
+  }</style>
 </head>
 <body>
 
@@ -795,16 +829,57 @@ td.adjust .adj-input {
 
     <!-- 导出/打印时包含哪些列 -->
     <div class="export-cols" id="exportCols">
-      <span class="export-cols-label">导出/打印包含：</span>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="no" onchange="onExportColsChange()"> 序号</label>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="name" onchange="onExportColsChange()"> 节目名称</label>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="actor" onchange="onExportColsChange()"> 表演团队</label>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="unit" onchange="onExportColsChange()"> 选送单位</label>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="scores" onchange="onExportColsChange()"> 评委打分</label>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="avg" onchange="onExportColsChange()"> <span id="expAvgLabel">平均分</span></label>
-      <label class="chk exp-adjust-only"><input type="checkbox" class="exp-col" data-col="adjust" onchange="onExportColsChange()"> 分数修正</label>
-      <label class="chk exp-adjust-only"><input type="checkbox" class="exp-col" data-col="final" onchange="onExportColsChange()"> 最终成绩</label>
-      <label class="chk"><input type="checkbox" class="exp-col" data-col="rank" onchange="onExportColsChange()"> 名次</label>
+      <span class="export-cols-label">导出/打印包含：<br><span style="font-size:11px;color:#a8adb5">← → 调整左右顺序</span></span>
+      <span class="exp-item" data-col="no">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="no" onchange="onExportColsChange()"> 序号</label>
+        <button class="exp-move" onclick="moveExpCol('no',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('no',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item" data-col="name">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="name" onchange="onExportColsChange()"> 节目名称</label>
+        <button class="exp-move" onclick="moveExpCol('name',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('name',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item" data-col="actor">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="actor" onchange="onExportColsChange()"> 表演团队</label>
+        <button class="exp-move" onclick="moveExpCol('actor',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('actor',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item" data-col="unit">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="unit" onchange="onExportColsChange()"> 选送单位</label>
+        <button class="exp-move" onclick="moveExpCol('unit',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('unit',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item" data-col="scores">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="scores" onchange="onExportColsChange()"> 评委打分</label>
+        <button class="exp-move" onclick="moveExpCol('scores',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('scores',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item" data-col="avg">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="avg" onchange="onExportColsChange()"> <span id="expAvgLabel">平均分</span></label>
+        <button class="exp-move" onclick="moveExpCol('avg',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('avg',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item exp-adjust-only" data-col="adjust">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="adjust" onchange="onExportColsChange()"> 分数修正</label>
+        <button class="exp-move" onclick="moveExpCol('adjust',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('adjust',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item exp-adjust-only" data-col="final">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="final" onchange="onExportColsChange()"> 最终成绩</label>
+        <button class="exp-move" onclick="moveExpCol('final',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('final',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item" data-col="rank">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="rank" onchange="onExportColsChange()"> 名次</label>
+        <button class="exp-move" onclick="moveExpCol('rank',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('rank',1)" title="右移">→</button>
+      </span>
+      <span class="exp-item" data-col="timer">
+        <label class="chk"><input type="checkbox" class="exp-col" data-col="timer" onchange="onExportColsChange()"> 节目计时</label>
+        <button class="exp-move" onclick="moveExpCol('timer',-1)" title="左移">←</button>
+        <button class="exp-move" onclick="moveExpCol('timer',1)" title="右移">→</button>
+      </span>
     </div>
 
     <div class="btnrow" style="margin-top:10px">
@@ -885,6 +960,7 @@ let state = {
   drawOrder: false,      // 现场抽签顺序（导入不自动填序号）
   showAdjust: true,      // 显示「分数修正 / 最终成绩」两列（本示例默认开）
   showTimer: false,      // 节目计时列（默认不勾选）
+  exportOrder: ['no','name','actor','unit','scores','avg','adjust','final','rank','timer'],  // 导出列顺序
   awards: { first: 0, second: 0, third: 0 },
   textOrder: ['name', 'actor', 'unit'],   // 节目名称 / 表演团队 / 选送单位
   customCols: [],        // 自定义列 [{key, label}]
@@ -1079,6 +1155,14 @@ function load() {
     state.rows.forEach(r => {
       if (!r.id) r.id = uid();
       if (!Array.isArray(r.scores)) r.scores = [];
+    });
+
+    // 兼容：旧数据没有 exportOrder
+    if (!Array.isArray(state.exportOrder) || !state.exportOrder.length) {
+      state.exportOrder = ['no','name','actor','unit','scores','avg','adjust','final','rank','timer'];
+    }
+    ['no','name','actor','unit','scores','avg','adjust','final','rank','timer'].forEach(k => {
+      if (!state.exportOrder.includes(k)) state.exportOrder.push(k);
     });
 
     // ★ 旧版数据自动迁移：老版本输入纯数字（如 95500）会自动换算成 95.500
@@ -3473,41 +3557,61 @@ function buildExportColumns() {
   const ec = state.exportCols || {};
   const cols = [];
 
-  // ===== 前两列：名次、最终成绩（最重要的结果放最前面）=====
-  if (ec.rank) cols.push({ key: 'rank', label: '名次', width: 82 });
-  if (state.showAdjust && ec.final) {
-    cols.push({ key: 'final', label: '最终成绩', width: 88 });
-  }
+  // 收集所有可能的列（带 key）
+  const all = [];
 
-  // ===== 然后：序号、文本列、评委分、平均分、分数修正 =====
-  if (ec.no) cols.push({ key: 'no', label: '序号', width: 58 });
+  if (ec.no) all.push({ key: 'no', label: '序号', width: 58 });
+
+  // 文本列
   state.textOrder.forEach(k => {
     if (ec[k]) {
-      cols.push({
-        key: k,
-        label: colLabel(k),
-        width: k === 'name' ? 210 : 150
-      });
+      all.push({ key: k, label: colLabel(k), width: k === 'name' ? 210 : 150 });
     }
   });
+
+  // 评委分
   if (ec.scores) {
     for (let i = 0; i < state.judgeCount; i++) {
-      cols.push({ key: 'score' + i, label: '评委' + (i + 1), width: 74, scoreIdx: i });
+      all.push({ key: 'score' + i, label: '评委' + (i + 1), width: 74, scoreIdx: i });
     }
   }
-  // 平均分列：不勾选分数修正时，它就是最终结果，标题显示「最终成绩」
-  if (ec.avg) {
-    cols.push({
-      key: 'avg',
-      label: state.showAdjust ? '平均分' : '最终成绩',
-      width: 88
-    });
-  }
-  if (state.showAdjust && ec.adjust) {
-    cols.push({ key: 'adjust', label: '分数修正', width: 82 });
+
+  // 平均分
+  if (state.showAdjust) {
+    if (ec.final) all.push({ key: 'final', label: '最终成绩', width: 88 });
+    if (ec.avg) all.push({ key: 'avg', label: '平均分', width: 88 });
+    if (ec.adjust) all.push({ key: 'adjust', label: '分数修正', width: 82 });
+  } else {
+    if (ec.avg) all.push({ key: 'avg', label: '最终成绩', width: 88 });
   }
 
-  return cols;
+  // 名次 / 计时
+  if (ec.rank) all.push({ key: 'rank', label: '名次', width: 82 });
+  if (state.showTimer && ec.timer !== false) {
+    all.push({ key: 'timer', label: '节目计时', width: 90 });
+  }
+
+  // ===== 按 state.exportOrder 排序 =====
+  if (!Array.isArray(state.exportOrder)) {
+    state.exportOrder = ['no','name','actor','unit','scores','avg','adjust','final','rank','timer'];
+  }
+  const order = state.exportOrder;
+
+  all.sort((a, b) => {
+    // 评委分归到 scores 的位置
+    const ka = a.scoreIdx !== undefined ? 'scores' : a.key;
+    const kb = b.scoreIdx !== undefined ? 'scores' : b.key;
+    let ia = order.indexOf(ka);
+    let ib = order.indexOf(kb);
+    if (ia < 0) ia = 999;
+    if (ib < 0) ib = 999;
+    if (ia !== ib) return ia - ib;
+    // 同组内按原顺序（评委分按索引）
+    if (a.scoreIdx !== undefined && b.scoreIdx !== undefined) return a.scoreIdx - b.scoreIdx;
+    return 0;
+  });
+
+  return all;
 }
 
 // 导出/打印时只取「有内容」的行（去掉没用的空行）
@@ -4411,6 +4515,9 @@ function esc(s) {
   undoStack = [];
   redoStack = [];
   updateUndoButtons();
+
+  // 渲染导出列顺序
+  renderExportColsOrder();
 })();
 
 /* ============================================================
@@ -4630,6 +4737,82 @@ function onShowTimerChange() {
   renderBody();
   syncExportColsUI();
   toast(state.showTimer ? '已显示节目计时列' : '已隐藏节目计时列');
+}
+
+/* ============================================================
+   导出列顺序调整（2026-10-25）
+   每个勾选项带 ← → 按钮，点击交换位置
+   ============================================================ */
+function moveExpCol(key, dir) {
+  if (!Array.isArray(state.exportOrder)) {
+    state.exportOrder = ['no','name','actor','unit','scores','avg','adjust','final','rank','timer'];
+  }
+  const arr = state.exportOrder;
+  const i = arr.indexOf(key);
+  if (i < 0) return;
+
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;   // 到头了
+
+  // 交换
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  save();
+  renderExportColsOrder();
+  toast(`「${expColLabel(key)}」已${dir < 0 ? '左' : '右'}移`);
+}
+
+function expColLabel(key) {
+  const map = {
+    no: '序号', name: '节目名称', actor: '表演团队', unit: '选送单位',
+    scores: '评委打分', avg: '平均分', adjust: '分数修正',
+    final: '最终成绩', rank: '名次', timer: '节目计时'
+  };
+  return map[key] || key;
+}
+
+/* 按 exportOrder 重排 DOM */
+function renderExportColsOrder() {
+  const box = document.getElementById('exportCols');
+  if (!box) return;
+
+  if (!Array.isArray(state.exportOrder)) {
+    state.exportOrder = ['no','name','actor','unit','scores','avg','adjust','final','rank','timer'];
+  }
+
+  // 收集所有 .exp-item
+  const items = {};
+  box.querySelectorAll('.exp-item').forEach(el => {
+    const k = el.dataset.col;
+    if (k) items[k] = el;
+  });
+
+  // 按 order 重新 append
+  state.exportOrder.forEach(k => {
+    if (items[k]) box.appendChild(items[k]);
+  });
+
+  // 自定义列放最后
+  Object.keys(items).forEach(k => {
+    if (!state.exportOrder.includes(k)) box.appendChild(items[k]);
+  });
+
+  // 更新按钮禁用状态
+  state.exportOrder.forEach((k, i) => {
+    const el = items[k];
+    if (!el) return;
+    const btns = el.querySelectorAll('.exp-move');
+    if (btns.length >= 2) {
+      btns[0].disabled = (i === 0);
+      btns[1].disabled = (i === state.exportOrder.length - 1);
+    }
+  });
+}
+
+/* 在 buildExportColumns 里应用自定义顺序 */
+function getExportOrderIndex(key) {
+  if (!Array.isArray(state.exportOrder)) return 999;
+  const i = state.exportOrder.indexOf(key);
+  return i < 0 ? 999 : i;
 }
 </script>
 
