@@ -1494,6 +1494,80 @@ function fmtScore(v, decimals) {
   return v.toFixed(decimals);
 }
 
+/* ============================================================
+   同分自动扩展小数位（2026-10-25）
+   问题：选 2 位小数时，97.812 和 97.809 都显示成 97.81，
+        看起来同分却名次不同，容易引起争议。
+   方案：按「显示的字符串」检测碰撞，若两行显示相同但实际值不同，
+        就把这一组的小数位 +1；3 位仍相同就继续加到 4、5…（上限 6）。
+   注意：只影响「显示」，不改变存储与排名计算。
+   ============================================================ */
+const MAX_AUTO_DECIMALS = 6;
+
+/**
+ * 计算每行结果列该用几位小数
+ * @param {Array} entries  [{ id, value }]  value = 参与显示并比较的数值
+ * @param {number} base   用户设定的小数位
+ * @returns {Object} id -> 小数位
+ */
+function computeDisplayDecimals(entries, base) {
+  const out = {};
+  const list = (entries || []).filter(e => e.value !== null && e.value !== undefined && !isNaN(e.value));
+  if (!list.length) return out;
+
+  // 默认都用基础小数位
+  list.forEach(e => { out[e.id] = base; });
+
+  // 反复：找出"显示值相同但实际值不同"的组，把它们的小数位 +1
+  for (let guard = 0; guard < 12; guard++) {
+    const groups = {};
+    list.forEach(e => {
+      const d = out[e.id];
+      const key = e.value.toFixed(d);
+      (groups[key] = groups[key] || []).push(e);
+    });
+
+    let bumped = false;
+    Object.keys(groups).forEach(key => {
+      const g = groups[key];
+      if (g.length < 2) return;
+      // 组内实际值是否真的有差异
+      const realVals = new Set(g.map(e => e.value));
+      if (realVals.size < 2) return;      // 完全相同的值：保持同分同显示
+      // 有差异 → 这一组小数位 +1（不超过上限）
+      let anyBump = false;
+      g.forEach(e => {
+        if (out[e.id] < MAX_AUTO_DECIMALS) { out[e.id] += 1; anyBump = true; }
+      });
+      if (anyBump) bumped = true;
+    });
+
+    if (!bumped) break;
+  }
+  return out;
+}
+
+/* 便捷封装：按当前表格算好后返回 { id: 小数位 } */
+function displayDecimalsMap() {
+  const base = state.decimals;
+  const useFinal = !!state.showAdjust;
+  const entries = [];
+  state.rows.forEach(r => {
+    const st = calcRow(r);
+    const v = useFinal ? st.final : st.avg;
+    if (v === null || v === undefined || isNaN(v)) return;
+    entries.push({ id: r.id, value: v });
+  });
+  return computeDisplayDecimals(entries, base);
+}
+
+/* 格式化某个数值：按该行是否发生碰撞自动用更多小数位 */
+function fmtScoreAuto(v, rowId, decMap) {
+  if (v === null || v === undefined || isNaN(v)) return '';
+  const d = (decMap && decMap[rowId] !== undefined) ? decMap[rowId] : state.decimals;
+  return v.toFixed(d);
+}
+
 /* 序号显示值：
    - 抽签模式下序号为空就显示空（不自动补行号）
    - 非抽签模式下序号为空时，回退显示行号（兼容老数据） */
@@ -1775,6 +1849,7 @@ function renderHead() {
 function renderBody() {
   const tbody = document.getElementById('tbody');
   const { rankMap } = computeRanks();
+  const _decMap = displayDecimalsMap();   // 同分自动扩展小数位
 
   tbody.innerHTML = '';
 
@@ -2107,6 +2182,7 @@ function ensureAtLeastOneRow() {
 function refreshStats() {
   const { rankMap } = computeRanks();
   const awardMap = computeAwards(rankMap);
+  const _decMap = displayDecimalsMap();   // 同分自动扩展小数位
 
   state.rows.forEach(row => {
     const tr = document.querySelector(`tr[data-rid="${row.id}"]`);
@@ -2136,7 +2212,7 @@ function refreshStats() {
         tdAvg.textContent = '—';
         tdAvg.style.color = '#c0c4cc';
       } else {
-        tdAvg.textContent = fmtScore(st.avg, state.decimals);
+        tdAvg.textContent = fmtScoreAuto(st.avg, row.id, _decMap);
         tdAvg.style.color = '#3370ff';
       }
     }
@@ -2149,7 +2225,7 @@ function refreshStats() {
           tdFinal.textContent = '—';
           tdFinal.style.color = '#c0c4cc';
         } else {
-          tdFinal.textContent = fmtScore(st.final, state.decimals);
+          tdFinal.textContent = fmtScoreAuto(st.final, row.id, _decMap);
           // 有修正时用不同颜色提示
           tdFinal.style.color = (st.adjust !== 0) ? '#f54a45' : '#1f2329';
         }
@@ -3959,6 +4035,7 @@ function buildPrintTable() {
   const awardMap = computeAwards(rankMap);
   const usedRows = getUsedRows();
   const titleText = state.title || DEFAULT_TITLE;
+  const decMap = displayDecimalsMap();   // 同分自动扩展小数位
 
   const wrap = document.createElement('div');
   wrap.id = 'printTableWrap';
@@ -3977,9 +4054,9 @@ function buildPrintTable() {
     cols.forEach((c, ci) => {
       let txt = '';
       if (c.key === 'no') txt = String(noDisplay(row, ri) || '');
-      else if (c.key === 'avg') txt = st.avg === null ? '' : fmtScore(st.avg, state.decimals);
+      else if (c.key === 'avg') txt = st.avg === null ? '' : fmtScoreAuto(st.avg, row.id, decMap);
       else if (c.key === 'adjust') { const a = st.adjust || 0; txt = a === 0 ? '' : (a > 0 ? '+' + a : String(a)); }
-      else if (c.key === 'final') txt = st.final === null ? '' : fmtScore(st.final, state.decimals);
+      else if (c.key === 'final') txt = st.final === null ? '' : fmtScoreAuto(st.final, row.id, decMap);
       else if (c.key === 'rank') txt = award || String(rk || '');
       else if (c.key === 'timer') txt = row.timer || '';
       else if (c.scoreIdx !== undefined) txt = String(row.scores[c.scoreIdx] ?? '');
@@ -4017,12 +4094,12 @@ function buildPrintTable() {
       if (c.key === 'no') {
         html += `<td>${esc(noDisplay(row, ri))}</td>`;
       } else if (c.key === 'avg') {
-        html += `<td>${st.avg === null ? '' : fmtScore(st.avg, state.decimals)}</td>`;
+        html += `<td>${st.avg === null ? '' : fmtScoreAuto(st.avg, row.id, decMap)}</td>`;
       } else if (c.key === 'adjust') {
         const a = st.adjust || 0;
         html += `<td>${a === 0 ? '' : (a > 0 ? '+' + a : String(a))}</td>`;
       } else if (c.key === 'final') {
-        html += `<td>${st.final === null ? '' : fmtScore(st.final, state.decimals)}</td>`;
+        html += `<td>${st.final === null ? '' : fmtScoreAuto(st.final, row.id, decMap)}</td>`;
       } else if (c.key === 'rank') {
         html += `<td>${award ? esc(award) : (rk || '')}</td>`;
       } else if (c.scoreIdx !== undefined) {
@@ -4453,6 +4530,7 @@ function exportExcel() {
   const { rankMap } = computeRanks();
   const awardMap = computeAwards(rankMap);
   const titleText = state.title || DEFAULT_TITLE;
+  const decMap = displayDecimalsMap();   // 同分自动扩展小数位
 
   const rows = [];
 
@@ -4472,12 +4550,12 @@ function exportExcel() {
       if (c.key === 'no') {
         return { v: noDisplay(row, ri), t: 's', style: 6 };
       } else if (c.key === 'avg') {
-        return { v: st.avg === null ? '' : fmtScore(st.avg, state.decimals), t: 's', style: 5 };
+        return { v: st.avg === null ? '' : fmtScoreAuto(st.avg, row.id, decMap), t: 's', style: 5 };
       } else if (c.key === 'adjust') {
         const a = st.adjust || 0;
         return { v: a === 0 ? '' : (a > 0 ? '+' + a : String(a)), t: 's', style: 6 };
       } else if (c.key === 'final') {
-        return { v: st.final === null ? '' : fmtScore(st.final, state.decimals), t: 's', style: 5 };
+        return { v: st.final === null ? '' : fmtScoreAuto(st.final, row.id, decMap), t: 's', style: 5 };
       } else if (c.key === 'rank') {
         return { v: award ? award : (rk || ''), t: 's', style: 6 };
       } else if (c.key === 'timer') {
@@ -4514,11 +4592,64 @@ function exportImage() {
   // 列定义：按勾选生成
   const exportCols = buildExportColumns();
   if (!exportCols.length) { toast('没有勾选任何列'); return; }
-  const cols = exportCols.map(c => ({ title: c.label, width: c.width, meta: c }));
 
   // 只画有内容的行，去掉空行
   const usedRows = getUsedRows();
   if (!usedRows.length) { toast('表格里还没有节目'); return; }
+  const decMap = displayDecimalsMap();   // 同分自动扩展小数位
+
+  /* ============================================================
+     图片列宽按内容实测（2026-10-25 修复文字截断）
+     旧版用固定 c.width，正文一长就 clipText 截成「…」。
+     现在用 canvas 量出每列真实需要的宽度，取所有行最大值。
+     ============================================================ */
+  const _measure = document.createElement('canvas').getContext('2d');
+  const FONT_BODY = '13px "Microsoft YaHei", sans-serif';
+  const FONT_BODY_B = 'bold 13px "Microsoft YaHei", sans-serif';
+  const FONT_NUM_B = 'bold 15px "Microsoft YaHei", sans-serif';
+  const FONT_HEAD_B = 'bold 13px "Microsoft YaHei", sans-serif';
+
+  // 取某行某列要显示的文字
+  function cellText(meta, row, ri) {
+    const st = calcRow(row);
+    const rk = rankMap[row.id];
+    const award = awardMap[row.id];
+    if (meta.key === 'no') return String(noDisplay(row, ri) ?? '');
+    if (meta.key === 'avg') return st.avg === null ? '' : fmtScoreAuto(st.avg, row.id, decMap);
+    if (meta.key === 'final') return st.final === null ? '' : fmtScoreAuto(st.final, row.id, decMap);
+    if (meta.key === 'adjust') { const a = st.adjust || 0; return a === 0 ? '' : (a > 0 ? '+' + a : String(a)); }
+    if (meta.key === 'rank') return award ? award : (rk ? String(rk) : '');
+    if (meta.key === 'timer') return String(row.timer || '');
+    if (meta.scoreIdx !== undefined) {
+      const rawS = row.scores[meta.scoreIdx];
+      return (rawS === undefined || rawS === null || String(rawS).trim() === '') ? '' : String(rawS);
+    }
+    return String(row[meta.key] || '');
+  }
+
+  const cols = exportCols.map(c => {
+    const meta = c;
+    // 表头宽度
+    _measure.font = FONT_HEAD_B;
+    let need = _measure.measureText(c.label).width;
+
+    // 各行内容宽度
+    usedRows.forEach((row, ri) => {
+      const t = cellText(meta, row, ri);
+      if (!t) return;
+      const boldNum = (meta.key === 'avg' || meta.key === 'final');
+      _measure.font = boldNum ? FONT_NUM_B : (meta.key === 'adjust' || meta.key === 'rank' || meta.key === 'timer' ? FONT_BODY_B : FONT_BODY);
+      const w = _measure.measureText(t).width;
+      if (w > need) need = w;
+    });
+
+    // 文本列左对齐留 12px；数字列居中留 20px
+    const isText = !['no','avg','final','adjust','rank','timer'].includes(meta.key) && meta.scoreIdx === undefined;
+    const pad = isText ? 24 : 28;
+    const width = Math.max(60, Math.ceil(need) + pad);
+    return { title: c.label, width, meta };
+  });
+
 
   const totalW = cols.reduce((a, c) => a + c.width, 0);
   const rowH = 38;
@@ -4611,7 +4742,7 @@ function exportImage() {
         ctx.fillRect(x, y, col.width, rowH);
         ctx.fillStyle = '#3370ff';
         ctx.font = 'bold 15px "Microsoft YaHei", sans-serif';
-        if (st.avg !== null) ctx.fillText(fmtScore(st.avg, state.decimals), x + col.width / 2, y + rowH / 2);
+        if (st.avg !== null) ctx.fillText(fmtScoreAuto(st.avg, row.id, decMap), x + col.width / 2, y + rowH / 2);
 
       } else if (meta.key === 'adjust') {
         ctx.textAlign = 'center';
@@ -4628,7 +4759,7 @@ function exportImage() {
         ctx.fillRect(x, y, col.width, rowH);
         ctx.fillStyle = (st.adjust !== 0) ? '#c92a2a' : '#1f2329';
         ctx.font = 'bold 15px "Microsoft YaHei", sans-serif';
-        if (st.final !== null) ctx.fillText(fmtScore(st.final, state.decimals), x + col.width / 2, y + rowH / 2);
+        if (st.final !== null) ctx.fillText(fmtScoreAuto(st.final, row.id, decMap), x + col.width / 2, y + rowH / 2);
 
       } else if (meta.key === 'rank') {
         ctx.textAlign = 'center';
@@ -4676,8 +4807,8 @@ function exportImage() {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#1f2329';
         ctx.font = '13px "Microsoft YaHei", sans-serif';
-        const txt = clipText(ctx, row[meta.key] || '', col.width - 12);
-        ctx.fillText(txt, x + 6, y + rowH / 2);
+        const txt = String(row[meta.key] || '');
+        if (txt) ctx.fillText(txt, x + 8, y + rowH / 2);
       }
 
       x += col.width;
