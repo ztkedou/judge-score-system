@@ -563,12 +563,18 @@ td.adjust .adj-input {
     min-width: 0;
     text-overflow: clip;
     overflow: visible;
+    white-space: nowrap;
   }
-  /* 文本列单元格本身 */
+  /* 文本列表头：不换行 */
   th.switchable { white-space: nowrap; }
+  /* 文本列单元格：给足最小宽度，内容能撑开不截断 */
   td:has(input.cell.text) {
-    min-width: 0;
-    padding: 0 4px;
+    min-width: 130px;
+    padding: 0 6px;
+  }
+  /* 节目名称列（第2列）额外宽 */
+  td:nth-child(2):has(input.cell.text) {
+    min-width: 220px;
   }
   /* 分数修正：两个窄框（总宽约 96px）*/
   td.adjust {
@@ -3577,9 +3583,30 @@ function makeXlsxBlob(sheets) {
       row.forEach((cell, ci) => { cells += cellXml(cell, r, ci); });
       rows += `<row r="${r}">${cells}</row>`;
     });
+    // 列宽：按每列最长内容估算（中文字符算2个宽度）
+    // 注意：第1行是标题（只占1格），不参与列宽计算
+    const dataRows = sh.rows.slice(1);   // 跳过标题行
+    const colCount = Math.max(...dataRows.map(r => r.length), 1);
+    let colsXml = '<cols>';
+    for (let ci = 0; ci < colCount; ci++) {
+      let maxLen = 8;
+      dataRows.forEach(row => {
+        const cell = row[ci];
+        if (!cell || cell.v === undefined || cell.v === null) return;
+        const str = String(cell.v);
+        // 中文算2，其他算1
+        let len = 0;
+        for (const ch of str) len += /[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/.test(ch) ? 2 : 1;
+        if (len > maxLen) maxLen = len;
+      });
+      // 列宽 = 字符数 + 余量（+4 给边距），限制 10~70
+      const width = Math.min(70, Math.max(10, maxLen + 4));
+      colsXml += `<col min="${ci+1}" max="${ci+1}" width="${width}" customWidth="1"/>`;
+    }
+    colsXml += '</cols>';
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<sheetData>${rows}</sheetData></worksheet>`;
+${colsXml}<sheetData>${rows}</sheetData></worksheet>`;
   });
 
   // [Content_Types].xml
