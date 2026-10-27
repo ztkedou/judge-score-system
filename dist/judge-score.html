@@ -752,6 +752,57 @@ td.adjust .adj-input {
   .timer-start:hover { background: #f0faf4; border-color: #0f7b3f; }
   .timer-stop { color: #d03050; border-color: #f0b8c2; }
   .timer-stop:hover { background: #fff1f3; border-color: #d03050; }
+  /* ============ 计时确认面板（页面底部内联，非弹窗）============ */
+  .timer-panel {
+    display: none;
+    background: #fff;
+    border: 2px solid #3370ff;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    box-shadow: 0 2px 10px rgba(51,112,255,.14);
+  }
+  .timer-panel.show { display: block; }
+  .timer-panel-head {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 700; color: #1f2329;
+    margin-bottom: 10px;
+  }
+  .timer-panel-head .tp-ico { color: #3370ff; font-size: 16px; }
+  .timer-panel-body {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .timer-panel-body .tp-row-info {
+    font-size: 13px; color: #646a73;
+    background: #f2f5fa; border-radius: 5px; padding: 5px 10px;
+  }
+  .timer-panel-body .tp-row-info b { color: #1f2329; }
+  .timer-panel-input {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 17px; font-weight: 700;
+    width: 130px; padding: 7px 10px;
+    border: 1px solid #d9dde3; border-radius: 6px;
+    text-align: center; letter-spacing: 1px;
+  }
+  .timer-panel-input:focus {
+    outline: none; border-color: #3370ff;
+    box-shadow: 0 0 0 3px rgba(51,112,255,.14);
+  }
+  .timer-panel-hint { font-size: 12px; color: #8f959e; }
+  .timer-panel-btns { display: flex; gap: 8px; margin-left: auto; }
+  .timer-panel-btns button { font-size: 13.5px; padding: 7px 18px; border-radius: 6px; }
+  .timer-panel-btns .primary {
+    background: #3370ff; color: #fff; border: 1px solid #3370ff;
+    font-weight: 600;
+  }
+  .timer-panel-btns .primary:hover { background: #245bdb; border-color: #245bdb; }
+  .timer-result {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 14px; font-weight: 700; color: #1f2329;
+    cursor: pointer; border-bottom: 1px dashed #b8bec9;
+    font-variant-numeric: tabular-nums;
+  }
+  .timer-result:hover { color: #3370ff; border-bottom-color: #3370ff; }
   /* ============ 导出列顺序调整 ============ */
   .exp-item {
     display: inline-flex;
@@ -812,6 +863,9 @@ td.adjust .adj-input {
       <span class="sep"></span>
       <button class="sort-btn" onclick="sortByNo()" title="按序号从小到大排序（Alt+S）">
         <span class="sort-ico">⇅</span>序号排序
+      </button>
+      <button onclick="renumberRowsConfirm()" title="按当前行顺序，把序号重排为 1、2、3…（解决删行后序号不连续）">
+        <span class="sort-ico">⟲</span>重新编号
       </button>
       <button class="sort-btn sort-btn-primary" onclick="sortByScore()" title="按最终成绩从高到低排序（Alt+P）">
         <span class="sort-ico">▼</span>分数排序
@@ -974,6 +1028,23 @@ td.adjust .adj-input {
     <div class="import-hint">
       <b>用途</b>：赛前把节目单和规则配置好 → 导出设置文件 → 现场打开网页导入该文件 → 只需输入分数。<br>
       文件格式为 <b>.json</b>，可用记事本打开查看，不要手动改内容。
+    </div>
+  </div>
+
+  <!-- 节目计时确认（页面最下方的内联区域，不是弹窗） -->
+  <div class="timer-panel" id="timerPanel">
+    <div class="timer-panel-head">
+      <span class="tp-ico">⏱</span>
+      <span>节目计时结果</span>
+    </div>
+    <div class="timer-panel-body">
+      <span class="tp-row-info" id="timerPanelRow">第 <b>1</b> 行</span>
+      <input type="text" id="timerInput" class="timer-panel-input" placeholder="00:00">
+      <span class="timer-panel-hint">可改，格式 mm:ss 或 hh:mm:ss</span>
+      <div class="timer-panel-btns">
+        <button class="primary" onclick="confirmTimer()">确认</button>
+        <button onclick="cancelTimer()">取消</button>
+      </div>
     </div>
   </div>
 
@@ -3394,9 +3465,26 @@ function delRow() {
   renderBody();
 }
 
-/* 序号自动重排为 1,2,3...（用户点「序号排序」时才会触发） */
+/* 序号自动重排为 1,2,3...（内部调用，不弹确认） */
 function renumberRows() {
   state.rows.forEach((r, i) => { r.no = i + 1; });
+}
+
+/* 「重新编号」按钮：确认后按当前行顺序重排序号为 1..N
+   用途：删行 / 插入行之后序号断了，一键补齐 */
+function renumberRowsConfirm() {
+  if (!state.rows.length) { toast('表格里还没有节目'); return; }
+
+  const msg = '重新编号？\n\n'
+    + `将按当前行的顺序，把 ${state.rows.length} 行的序号重排为 1、2、3…\n\n`
+    + '已填的分数和节目信息都不会变，只改序号。\n\n'
+    + '确定重新编号？';
+  if (!confirm(msg)) return;
+
+  renumberRows();
+  save();
+  renderBody();
+  toast(`已重新编号：1 ~ ${state.rows.length}`);
 }
 
 function addJudge() {
@@ -5030,6 +5118,7 @@ document.addEventListener('keydown', e => {
     if (!shift && k === 'k')         { run(delJudge); return; }
     if (!shift && k === 's')         { run(sortByNo); return; }      // 序号排序
     if (!shift && k === 'p')         { run(sortByScore); return; }   // 分数排序
+    if (!shift && k === 'n')         { run(renumberRowsConfirm); return; } // 重新编号
     return;
   }
 
@@ -5068,6 +5157,7 @@ const SHORTCUTS = [
   { group: '排序', items: [
     ['Alt + S', '序号排序'],
     ['Alt + P', '分数排序'],
+    ['Alt + N', '重新编号（1…N）'],
   ]},
   { group: '导入导出', items: [
     ['Ctrl + I', '导入节目名单'],
@@ -5285,7 +5375,7 @@ function setupStickyHeader() {
 
 /* ============================================================
    节目计时（2026-10-24）
-   每行一个独立计时器：开始/暂停 → 停止 → 弹窗可改 → 确认入格
+   每行一个独立计时器：开始/暂停 → 停止 → 页面底部内联面板可改 → 确认入格
    ============================================================ */
 
 
@@ -5400,26 +5490,38 @@ function buildTimerCell(td, row) {
   td.appendChild(wrap);
 }
 
-/* 停止后弹窗：可修改，确认入格 */
+/* 停止后：在页面最下方的内联面板里确认时间（不是弹窗，不遮挡表格） */
 function showTimerDialog(row, seconds, td) {
-  const modal = document.getElementById('timerModal');
+  const panel = document.getElementById('timerPanel');
   const input = document.getElementById('timerInput');
-  if (!modal || !input) return;
+  const rowInfo = document.getElementById('timerPanelRow');
+  if (!panel || !input) return;
+
+  const ri = state.rows.indexOf(row);
+  const label = (row.name || '').trim() || '（未命名节目）';
+  if (rowInfo) {
+    rowInfo.innerHTML = `第 <b>${ri + 1}</b> 行 · <b>${esc(label)}</b>`;
+  }
 
   input.value = fmtTimer(seconds);
-  modal.dataset.rid = row.id;
-  modal.classList.add('show');
+  panel.dataset.rid = row.id;
+  panel.classList.add('show');
 
-  setTimeout(() => { input.focus(); input.select(); }, 50);
+  // 滚到页面底部，让用户看到这个区域
+  setTimeout(() => {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    input.focus();
+    input.select();
+  }, 50);
 }
 
 /* 确认计时结果 */
 function confirmTimer() {
-  const modal = document.getElementById('timerModal');
+  const panel = document.getElementById('timerPanel');
   const input = document.getElementById('timerInput');
-  if (!modal || !input) return;
+  if (!panel || !input) return;
 
-  const rid = modal.dataset.rid;
+  const rid = panel.dataset.rid;
   const val = input.value.trim();
   if (!val) { toast('请填写时间'); return; }
 
@@ -5435,7 +5537,7 @@ function confirmTimer() {
     delete window.__timerState[rid];
   }
 
-  modal.classList.remove('show');
+  panel.classList.remove('show');
 
   // 重新渲染这一格
   const tr = document.querySelector(`tr[data-rid="${rid}"]`);
@@ -5448,9 +5550,27 @@ function confirmTimer() {
 
 /* 取消计时 */
 function cancelTimer() {
-  const modal = document.getElementById('timerModal');
-  if (modal) modal.classList.remove('show');
+  const panel = document.getElementById('timerPanel');
+  if (panel) panel.classList.remove('show');
 }
+
+/* 计时面板输入框：回车确认，Esc 取消 */
+(function bindTimerPanelKeys() {
+  const bind = () => {
+    const input = document.getElementById('timerInput');
+    if (!input || input.dataset.bound) return;
+    input.dataset.bound = '1';
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); confirmTimer(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancelTimer(); }
+    });
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    bind();
+  }
+})();
 
 /* 勾选/取消节目计时 */
 function onShowTimerChange() {
@@ -5782,17 +5902,7 @@ function defaultExportOrder() {
 }
 </script>
 
-<!-- 节目计时弹窗 -->
-<div class="timer-modal" id="timerModal">
-  <div class="timer-dialog">
-    <div class="timer-dialog-title">节目计时结果</div>
-    <div class="timer-dialog-hint">可以修改，格式 mm:ss 或 hh:mm:ss</div>
-    <input type="text" id="timerInput" class="timer-dialog-input" placeholder="00:00">
-    <div class="timer-dialog-btns">
-      <button class="primary" onclick="confirmTimer()">确认</button>
-      <button onclick="cancelTimer()">取消</button>
-    </div>
-  </div>
+
 </div>
 </body>
 </html>
