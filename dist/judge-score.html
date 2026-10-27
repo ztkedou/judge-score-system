@@ -473,6 +473,32 @@
     z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,.22); max-width: 80vw;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  /* 带操作按钮的 Toast（撤销条） */
+  .toast.has-action {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 10px 10px 18px;
+    bottom: 34px;
+  }
+  .toast .toast-msg { flex: 1; white-space: nowrap; }
+  .toast .toast-action {
+    flex: 0 0 auto;
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.34);
+    color: #fff;
+    font-size: 13px; font-weight: 700;
+    padding: 6px 15px;
+    border-radius: 7px;
+    cursor: pointer;
+    letter-spacing: .3px;
+    transition: background .15s, border-color .15s;
+  }
+  .toast .toast-action:hover {
+    background: rgba(255,255,255,.3);
+    border-color: #fff;
+    transform: none;
+    box-shadow: none;
+  }
+  .toast .toast-action:active { transform: scale(.96); }
 
   /* 列头下拉菜单 */
   .colmenu {
@@ -1818,12 +1844,53 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 
 /* ---------------- 提示 ---------------- */
 let toastTimer = null;
-function toast(msg) {
+/* ---------------- Toast（支持带操作按钮，向后兼容） ----------------
+   用法：
+     toast('已保存')                                    // 老写法，不变
+     toast('已清空 12 行', { action:'撤销', onAction:fn, duration:5000 })
+   action 按钮点击后立即消失，并调用 onAction。
+   同时只显示一条（新的顶掉旧的），符合「Toast 不阻断操作」的定位。
+------------------------------------------------------------ */
+let _toastActionTimer = null;
+function toast(msg, opts) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
+  if (!el) return;
+
+  const o = opts || {};
+  const duration = (o.duration === undefined || o.duration === null) ? 2000 : o.duration;
+
+  // 清掉上一次的按钮和定时器，避免叠加
+  if (_toastActionTimer) { clearTimeout(_toastActionTimer); _toastActionTimer = null; }
+  el.innerHTML = '';
+  el.classList.remove('has-action');
+
+  const txt = document.createElement('span');
+  txt.className = 'toast-msg';
+  txt.textContent = msg;
+  el.appendChild(txt);
+
+  if (o.action && typeof o.onAction === 'function') {
+    el.classList.add('has-action');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action';
+    btn.textContent = o.action;
+    btn.onclick = () => {
+      hideToast();
+      try { o.onAction(); } catch (e) { console.warn(e); }
+    };
+    el.appendChild(btn);
+  }
+
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+  toastTimer = setTimeout(hideToast, duration);
+}
+
+function hideToast() {
+  const el = document.getElementById('toast');
+  if (el) el.classList.remove('show');
+  if (_toastActionTimer) { clearTimeout(_toastActionTimer); _toastActionTimer = null; }
 }
 
 /* ---------------- 分数解析 ----------------
@@ -3821,12 +3888,36 @@ function addRow() {
 function delRow() {
   if (!state.rows.length) { toast('没有可删除的行'); return; }
   const last = state.rows[state.rows.length - 1];
-  const name = last.name || `第 ${state.rows.length} 行`;
-  if (!confirm(`删除最后一行「${name}」？`)) return;
+  const label = (last.name || '').trim() || `第 ${state.rows.length} 行`;
+
+  // 能撤销就别做二次确认：直接删，快照留底，给 5 秒撤销窗口
+  const backup = JSON.stringify(state);
+  takeSnapshot(true);
   state.rows.pop();
   ensureAtLeastOneRow();   // 删光了也保留一行可编辑空行
   save();
   renderBody();
+  updateUndoButtons();
+
+  toast(`已删除「${label}」`, {
+    action: '撤销',
+    duration: 5000,
+    onAction: () => {
+      try {
+        state = Object.assign(state, JSON.parse(backup));
+        if (!Array.isArray(state.customCols)) state.customCols = [];
+        if (!Array.isArray(state.textOrder) || !state.textOrder.length) state.textOrder = ['name', 'actor'];
+        state.rows.forEach(r => { if (!r.id) r.id = uid(); if (!Array.isArray(r.scores)) r.scores = []; });
+        save();
+        syncAllUI();
+        renderHead();
+        renderBody();
+        toast('已撤销删除');
+      } catch (e) {
+        toast('撤销失败：' + e.message);
+      }
+    }
+  });
 }
 
 /* 序号自动重排为 1,2,3...（内部调用，不弹确认） */
@@ -3862,14 +3953,39 @@ function addJudge() {
 
 function delJudge() {
   if (state.judgeCount <= 1) { toast('至少保留 1 个评委'); return; }
-  if (!confirm(`减少到 ${state.judgeCount - 1} 个评委？\n最后一个评委的分数会被删除。`)) return;
+
+  // 能撤销就别做二次确认：直接减，快照留底，给 5 秒撤销窗口
+  const backup = JSON.stringify(state);
+  const removedNo = state.judgeCount;
+
+  takeSnapshot(true);
   state.judgeCount--;
   // 清掉超出范围的分数
   state.rows.forEach(r => { r.scores = r.scores.slice(0, state.judgeCount); });
   save();
   renderHead();
   renderBody();
-  toast(`现在是 ${state.judgeCount} 个评委`);
+  updateUndoButtons();
+
+  toast(`已移除评委${removedNo}（现在 ${state.judgeCount} 个）`, {
+    action: '撤销',
+    duration: 5000,
+    onAction: () => {
+      try {
+        state = Object.assign(state, JSON.parse(backup));
+        if (!Array.isArray(state.customCols)) state.customCols = [];
+        if (!Array.isArray(state.textOrder) || !state.textOrder.length) state.textOrder = ['name', 'actor'];
+        state.rows.forEach(r => { if (!r.id) r.id = uid(); if (!Array.isArray(r.scores)) r.scores = []; });
+        save();
+        syncAllUI();
+        renderHead();
+        renderBody();
+        toast(`已撤销，恢复 ${state.judgeCount} 个评委`);
+      } catch (e) {
+        toast('撤销失败：' + e.message);
+      }
+    }
+  });
 }
 
 /* ---------------- 排序 ---------------- */
@@ -3923,13 +4039,39 @@ function sortByScore() {
 /* ---------------- 清空 ---------------- */
 function clearAll() {
   if (!state.rows.length) { toast('已经是空的了'); return; }
-  if (!confirm('确定清空全部节目和分数？\n建议先导出备份。')) return;
-  if (!confirm('再确认一次：数据将全部删除，无法恢复。')) return;
+
+  // 能撤销就别做二次确认：先把完整快照留一份，直接清空，给 5 秒撤销窗口
+  const backup = JSON.stringify(state);
+  const clearedRows = state.rows.length;
+  const hadScore = state.rows.some(r => (r.scores || []).some(
+    x => String(x === undefined || x === null ? '' : x).trim() !== ''));
+
+  takeSnapshot(true);          // 先落一步撤销历史，Ctrl+Z 也能回
   state.rows = [];
   for (let i = 1; i <= DEFAULT_ROWS; i++) state.rows.push(makeEmptyRow(i));
   save();
   renderBody();
-  toast(`已清空，恢复为 ${DEFAULT_ROWS} 行空表格`);
+  updateUndoButtons();
+
+  toast(`已清空 ${clearedRows} 行` + (hadScore ? '（含分数）' : ''), {
+    action: '撤销',
+    duration: 5000,
+    onAction: () => {
+      try {
+        state = Object.assign(state, JSON.parse(backup));
+        if (!Array.isArray(state.customCols)) state.customCols = [];
+        if (!Array.isArray(state.textOrder) || !state.textOrder.length) state.textOrder = ['name', 'actor'];
+        state.rows.forEach(r => { if (!r.id) r.id = uid(); if (!Array.isArray(r.scores)) r.scores = []; });
+        save();
+        syncAllUI();
+        renderHead();
+        renderBody();
+        toast('已撤销清空');
+      } catch (e) {
+        toast('撤销失败：' + e.message);
+      }
+    }
+  });
 }
 
 /* ---------------- 导入 ----------------
@@ -4305,14 +4447,14 @@ function applySetup(pack) {
 ------------------------------------------------ */
 function resetSettings() {
   if (!confirm(
-    '恢复默认设置？\n\n' +
+    '恢复默认设置\n\n' +
     '将会恢复：\n' +
     '· 活动标题\n' +
     '· 满分 / 小数位 / 评委人数\n' +
     '· 奖项名额、各个勾选项、列顺序\n' +
     '· 被删除的节目行（补回原位置）\n\n' +
     '不会清除：已打的分数、已填的节目名称。\n\n' +
-    '确定恢复？'
+    '点「确定」= 恢复默认设置　|　点「取消」= 保留当前设置'
   )) return;
 
   // ---- 1. 记录当前数据：按节目名匹配 + 按位置兜底 ----
@@ -5408,14 +5550,37 @@ function ctxDeleteRow() {
   const row = state.rows[idx];
   const label = (row.name || '').trim() || (row.actor || '').trim() || `第 ${idx + 1} 行`;
 
-  if (!confirm(`确定删除这一行？\n\n「${label}」\n\n删除后该行的分数也会一起清除。`)) return;
+  // 能撤销就别做二次确认：直接删，快照留底，给 5 秒撤销窗口
+  const backup = JSON.stringify(state);
+  const removedAt = idx;
+  takeSnapshot(true);
 
   state.rows.splice(idx, 1);
   // 删掉一行后，末尾补一行空行，保持表格行数不变
   state.rows.push(makeEmptyRow(state.rows.length + 1));
   save();
   renderBody();
-  toast('已删除该行');
+  updateUndoButtons();
+
+  toast(`已删除第 ${removedAt + 1} 行「${label}」`, {
+    action: '撤销',
+    duration: 5000,
+    onAction: () => {
+      try {
+        state = Object.assign(state, JSON.parse(backup));
+        if (!Array.isArray(state.customCols)) state.customCols = [];
+        if (!Array.isArray(state.textOrder) || !state.textOrder.length) state.textOrder = ['name', 'actor'];
+        state.rows.forEach(r => { if (!r.id) r.id = uid(); if (!Array.isArray(r.scores)) r.scores = []; });
+        save();
+        syncAllUI();
+        renderHead();
+        renderBody();
+        toast('已撤销删除');
+      } catch (e) {
+        toast('撤销失败：' + e.message);
+      }
+    }
+  });
 }
 
 // 点击别处关闭右键菜单（点菜单自身不关，否则点不到删除）
