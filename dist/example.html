@@ -837,7 +837,290 @@ td.adjust .adj-input {
   .exp-item .exp-move:disabled {
     opacity: .25;
     cursor: not-allowed;
-  }</style>
+  }
+
+/* ============================================================
+   2026-10-27 视觉升级 v7 —— 暖白底 + 黑字 + 玻璃感界面
+   方法论来源：AI 代码动画（先定美术风格，再沿状态变化做节奏）
+   硬约束：纯 CSS 原生，零外部依赖；只在屏幕上生效，打印完全不变
+   ============================================================ */
+@media screen {
+  :root {
+    --ink:      #17181c;
+    --ink-2:    #565b66;
+    --ink-3:    #9a9ea8;
+    --line:     rgba(23,24,28,.085);
+    --line-2:   rgba(23,24,28,.055);
+    --glass:    rgba(255,255,255,.72);
+    --warm:     #faf7f2;
+    --brand:    #3370ff;
+    --shadow-s: 0 1px 2px rgba(23,24,28,.05), 0 10px 26px -18px rgba(23,24,28,.28);
+    --shadow-m: 0 1px 2px rgba(23,24,28,.05), 0 22px 48px -30px rgba(23,24,28,.42);
+  }
+
+  body {
+    background:
+      radial-gradient(1100px 640px at 6% -8%, #fff4e4 0%, rgba(255,244,228,0) 62%),
+      radial-gradient(940px 560px at 98% 2%, #eaf1ff 0%, rgba(234,241,255,0) 58%),
+      var(--warm);
+    background-attachment: fixed;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .wrap { padding: 16px 14px 44px; max-width: 1700px; margin: 0 auto; }
+
+  /* ---------- 顶栏：深色玻璃 ---------- */
+  .topbar {
+    background: linear-gradient(180deg, rgba(19,20,23,.97) 0%, rgba(30,32,37,.93) 100%);
+    -webkit-backdrop-filter: blur(18px) saturate(1.25);
+    backdrop-filter: blur(18px) saturate(1.25);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    padding: 13px 24px;
+  }
+  .topbar h1 { font-size: 16px; letter-spacing: .2px; }
+  .topbar .sub { opacity: .48; font-size: 11.5px; }
+  .author-badge { font-size: 12px; color: rgba(255,255,255,.55); }
+
+  /* ---------- 玻璃卡片 ---------- */
+  .panel,
+  .tablewrap,
+  .titlebar,
+  .empty {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-s);
+  }
+  .panel {
+    border-radius: 14px;
+    padding: 15px 17px;
+    margin-bottom: 12px;
+  }
+  .panel-title {
+    font-size: 11px;
+    letter-spacing: 1.4px;
+    color: var(--ink-3);
+    font-weight: 700;
+    margin-bottom: 11px;
+  }
+
+  /* 标题栏 + 表格拼成一张卡 */
+  .titlebar {
+    border-radius: 14px 14px 0 0;
+    border-bottom: 1px solid var(--line-2);
+    box-shadow: none;
+    padding: 17px 18px 15px;
+  }
+  .titlebar.stuck {
+    border-radius: 0 0 14px 14px;
+    box-shadow: 0 14px 32px -18px rgba(23,24,28,.5);
+    border-bottom: 1px solid var(--line);
+  }
+  .title-text { font-size: 23px; letter-spacing: 2.5px; color: var(--ink); }
+  .title-edit {
+    font-size: 23px; letter-spacing: 2.5px; color: var(--ink);
+    border-radius: 8px;
+  }
+  .title-edit:focus {
+    border-color: rgba(51,112,255,.55);
+    box-shadow: 0 0 0 4px rgba(51,112,255,.1);
+  }
+  .tablewrap {
+    border-radius: 0 0 14px 14px;
+    border-top: none;
+    box-shadow: var(--shadow-m);
+    margin-bottom: 14px;
+  }
+
+  /* ---------- 表格质感 ---------- */
+  thead th {
+    background: rgba(247,247,245,.92);
+    border-color: var(--line-2);
+    color: var(--ink-2);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: .4px;
+  }
+  thead th.fixed-col { background: rgba(240,239,236,.95); }
+  tbody td { border-color: var(--line-2); height: 38px; }
+  tbody tr { transition: background .18s ease; }
+  tbody tr:hover td { background: rgba(51,112,255,.032); }
+  tbody td.fixed-col { background: rgba(248,247,245,.85); }
+  tbody tr:hover td.fixed-col { background: rgba(243,242,239,.95); }
+
+  /* 输入格：焦点柔光 */
+  td input.cell {
+    transition: background .18s ease, box-shadow .18s ease;
+    border-radius: 5px;
+  }
+  td input.cell:focus {
+    background: rgba(51,112,255,.055);
+    box-shadow: inset 0 0 0 2px rgba(51,112,255,.72), 0 0 0 4px rgba(51,112,255,.09);
+  }
+
+  /* 平均分 / 最终成绩：等宽数字，滚动时不抖 */
+  td.avg, td.final {
+    font-size: 16px;
+    letter-spacing: .2px;
+    font-variant-numeric: tabular-nums;
+    background: rgba(51,112,255,.045);
+  }
+  td.final { background: rgba(51,112,255,.045); }
+  .rank-tag { border-radius: 7px; }
+
+  /* ---------- 按钮：轻质感 ---------- */
+  button {
+    border-radius: 9px;
+    padding: 6px 13px;
+    border-color: rgba(23,24,28,.13);
+    box-shadow: 0 1px 1.5px rgba(23,24,28,.05);
+    transition: all .16s cubic-bezier(.4,0,.2,1);
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 12px -4px rgba(51,112,255,.45);
+  }
+  button:active { transform: scale(.97); box-shadow: none; }
+  button.primary {
+    background: linear-gradient(180deg, #4c86ff 0%, #2f66f5 100%);
+    border-color: #2f66f5;
+    box-shadow: 0 2px 12px -3px rgba(51,112,255,.55);
+  }
+  button.sort-btn { border-radius: 9px; }
+  .preset-btn, .exp-item, .timer-btn, .exp-item .exp-move { border-radius: 8px; }
+
+  /* ============================================================
+     关键状态动效（"沿拍点变化"的落地：只在状态真的变了才播）
+     ============================================================ */
+
+  /* 1) 最高分红框 / 最低分蓝框：首次出现时向外扩散一圈光 */
+  @keyframes cellPulseRed {
+    0%   { box-shadow: inset 0 0 0 2px #f54a45, 0 0 0 0 rgba(245,74,69,.42); }
+    65%  { box-shadow: inset 0 0 0 2px #f54a45, 0 0 0 10px rgba(245,74,69,0); }
+    100% { box-shadow: inset 0 0 0 2px #f54a45, 0 0 0 0 rgba(245,74,69,0); }
+  }
+  @keyframes cellPulseBlue {
+    0%   { box-shadow: inset 0 0 0 2px #1a7fd4, 0 0 0 0 rgba(26,127,212,.42); }
+    65%  { box-shadow: inset 0 0 0 2px #1a7fd4, 0 0 0 10px rgba(26,127,212,0); }
+    100% { box-shadow: inset 0 0 0 2px #1a7fd4, 0 0 0 0 rgba(26,127,212,0); }
+  }
+  td.score.highest.pulse { animation: cellPulseRed .6s cubic-bezier(.33,1,.68,1); }
+  td.score.lowest.pulse  { animation: cellPulseBlue .6s cubic-bezier(.33,1,.68,1); }
+
+  /* 2) 名次变了：整行扫过一道淡蓝 */
+  @keyframes rowSweep {
+    0%   { background-color: rgba(51,112,255,0); }
+    20%  { background-color: rgba(51,112,255,.17); }
+    100% { background-color: rgba(51,112,255,0); }
+  }
+  tbody tr.rank-flash td:not(.highest):not(.lowest):not(.selected) {
+    animation: rowSweep .7s cubic-bezier(.33,1,.68,1);
+  }
+
+  /* 3) 名次徽章：回弹一下 */
+  @keyframes tagPop {
+    0%   { transform: scale(.7);  opacity: .3; }
+    55%  { transform: scale(1.09); opacity: 1; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+  .rank-tag.pop { animation: tagPop .44s cubic-bezier(.34,1.56,.64,1); }
+
+  /* 4) 首屏：卡片依次上浮淡入 */
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .topbar { animation: cardIn .42s cubic-bezier(.22,1,.36,1) backwards; }
+  .wrap > .panel,
+  .wrap > .titlebar,
+  .wrap > .tablewrap {
+    animation: cardIn .52s cubic-bezier(.22,1,.36,1) backwards;
+  }
+  .wrap > :nth-child(1) { animation-delay: .04s; }
+  .wrap > :nth-child(2) { animation-delay: .10s; }
+  .wrap > :nth-child(3) { animation-delay: .16s; }
+  .wrap > :nth-child(4) { animation-delay: .22s; }
+  .wrap > :nth-child(n+5) { animation-delay: .28s; }
+
+  /* 5) 提示条：从下方滑入 */
+  .toast { border-radius: 10px; }
+  .toast.show { animation: none; }
+
+  /* 尊重系统「减少动态效果」设置 */
+  @media (prefers-reduced-motion: reduce) {
+    .topbar, .wrap > .panel, .wrap > .titlebar, .wrap > .tablewrap,
+    td.score.highest.pulse, td.score.lowest.pulse,
+    tbody tr.rank-flash td, .rank-tag.pop {
+      animation: none !important;
+    }
+    * { transition-duration: .001ms !important; }
+  }
+}
+
+/* ============================================================
+   手机竖屏（9:16 录屏 / 真机）：更松的留白 + 更大的触控目标
+   ============================================================ */
+@media screen and (max-width: 640px) {
+  .wrap { padding: 11px 11px 34px; }
+  .topbar { padding: 11px 14px; flex-wrap: wrap; gap: 7px; }
+  .topbar h1 { font-size: 15px; }
+  .topbar .sub { display: block; margin-left: 0; font-size: 11px; }
+  .author-badge { font-size: 11px; gap: 7px; }
+  .ab-contact { white-space: normal; }
+
+  .panel { padding: 13px 13px; border-radius: 13px; }
+  .titlebar { padding: 15px 12px 13px; }
+  .title-text, .title-edit { font-size: 19px; letter-spacing: 1.6px; }
+  .title-edit { width: 100%; min-width: 0; max-width: none; }
+
+  button { padding: 8px 12px; font-size: 12.5px; border-radius: 8px; }
+  .btnrow { gap: 6px; }
+  .btnrow .sep { height: 18px; margin: 0 1px; }
+  .highlight-row { padding: 9px 11px; }
+  .highlight-hint { font-size: 11.5px; }
+
+  thead th .th-inner { min-height: 34px; font-size: 12px; padding: 7px 4px; }
+  tbody td { height: 41px; }
+  td input.cell { font-size: 13.5px; }
+  td.avg, td.final { font-size: 15px; }
+  .rank-tag { font-size: 11.5px; padding: 2px 7px; }
+  .import-hint { font-size: 11.5px; }
+
+  /* ★ 手机竖屏：表格改为横向滚动，每列保证够宽
+     （否则 540px 塞 10 列 → 分数被截成 "98." 没法看也没法录屏） */
+  .tablewrap {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  table#mainTable {
+    width: auto !important;
+    max-width: none !important;
+    min-width: 760px !important;
+    table-layout: auto !important;
+  }
+  /* 横向滚动容器内 sticky 表头会错位，手机端改为普通定位 */
+  thead th { position: static !important; }
+  thead th .th-inner { min-width: 58px; }
+  /* 分数修正列不再强制 96px（手机上跟着内容走） */
+  td.adjust, #mainTable td.adjust {
+    width: auto !important;
+    min-width: 84px !important;
+    max-width: none !important;
+  }
+  td.adjust .adj-cell, #mainTable td.adjust .adj-cell {
+    width: 38px !important; max-width: 38px !important;
+  }
+  td.adjust .adj-input, #mainTable td.adjust .adj-input {
+    width: 38px !important; max-width: 38px !important;
+  }
+  /* 序号列在手机上收窄，把宽度让给分数 */
+  thead th.fixed-col, tbody td.fixed-col { min-width: 44px; }
+}
+</style>
 </head>
 <body>
 
@@ -2259,6 +2542,72 @@ function ensureAtLeastOneRow() {
   }
 }
 
+/* ============================================================
+   2026-10-27 视觉升级 v7 —— 动效辅助
+   setAnimatedNumber：平均分 / 最终成绩变化时数字滚动（260ms 缓出）
+   pulseOnce：最高分红框 / 最低分蓝框"首次出现"时才脉冲，避免每次重排都闪
+   ============================================================ */
+const _reduceMotion = (() => {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch (e) { return false; }
+})();
+
+function setAnimatedNumber(el, text) {
+  if (!el) return;
+  const prevText = el.dataset.valText;
+  el.dataset.valText = text;
+
+  // 空值 / 占位符：直接落字，不做动画
+  if (text === undefined || text === null || text === '' || text === '—') {
+    el.textContent = text || '';
+    if (el._raf) { cancelAnimationFrame(el._raf); el._raf = 0; }
+    return;
+  }
+
+  // 首次渲染或用户要求减少动效：直接落字
+  if (_reduceMotion || prevText === undefined || prevText === '' || prevText === '—') {
+    el.textContent = text;
+    return;
+  }
+  if (prevText === text) { el.textContent = text; return; }
+
+  const to = parseFloat(text);
+  const cur = parseFloat(el.textContent);
+  const from = isNaN(cur) ? parseFloat(prevText) : cur;
+  if (isNaN(to) || isNaN(from) || from === to) { el.textContent = text; return; }
+
+  // 保留目标文本的小数位（同分扩展小数位时位数可能变）
+  const dot = text.indexOf('.');
+  const dec = dot < 0 ? 0 : Math.min(3, text.length - dot - 1);
+
+  if (el._raf) cancelAnimationFrame(el._raf);
+  const t0 = performance.now(), DUR = 260;
+  const step = (t) => {
+    const p = Math.min(1, (t - t0) / DUR);
+    const e = 1 - Math.pow(1 - p, 3);          // easeOutCubic
+    el.textContent = (from + (to - from) * e).toFixed(dec);
+    if (p < 1) {
+      el._raf = requestAnimationFrame(step);
+    } else {
+      el.textContent = text;                    // 落回精确文本，避免浮点尾巴
+      el._raf = 0;
+    }
+  };
+  el._raf = requestAnimationFrame(step);
+}
+
+function pulseOnce(td, key, on) {
+  if (!td) return;
+  const flag = '_pulse_' + key;
+  if (on && !td[flag]) {
+    td.classList.remove('pulse');
+    void td.offsetWidth;                        // 强制重排，动画才能重播
+    td.classList.add('pulse');
+  }
+  if (!on) td.classList.remove('pulse');
+  td[flag] = !!on;
+}
+
 /* ---------------- 只刷新统计（不重建 DOM）---------------- */
 function refreshStats() {
   const { rankMap } = computeRanks();
@@ -2277,6 +2626,9 @@ function refreshStats() {
       td.classList.toggle('highest', st.highest.includes(i));
       td.classList.toggle('lowest', st.lowest.includes(i));
       td.classList.toggle('dropped', st.dropped.includes(i));
+      // 最高/最低框「刚变成」时才脉冲一下，不是每次重排都闪
+      pulseOnce(td, 'hi', st.highest.includes(i));
+      pulseOnce(td, 'lo', st.lowest.includes(i));
 
       // 超范围标红
       const v = parseScore(row.scores[i], state.maxScore, state.decimals);
@@ -2293,7 +2645,7 @@ function refreshStats() {
         tdAvg.textContent = '—';
         tdAvg.style.color = '#c0c4cc';
       } else {
-        tdAvg.textContent = fmtScoreAuto(st.avg, row.id, _decMap);
+        setAnimatedNumber(tdAvg, fmtScoreAuto(st.avg, row.id, _decMap));
         tdAvg.style.color = '#3370ff';
       }
     }
@@ -2306,7 +2658,7 @@ function refreshStats() {
           tdFinal.textContent = '—';
           tdFinal.style.color = '#c0c4cc';
         } else {
-          tdFinal.textContent = fmtScoreAuto(st.final, row.id, _decMap);
+          setAnimatedNumber(tdFinal, fmtScoreAuto(st.final, row.id, _decMap));
           // 有修正时用不同颜色提示
           tdFinal.style.color = (st.adjust !== 0) ? '#f54a45' : '#1f2329';
         }
@@ -2317,15 +2669,27 @@ function refreshStats() {
     const tdRank = tr.querySelector('td.rank');
     if (tdRank) {
       const rk = rankMap[row.id];
+      const award = awardMap[row.id];
+      const sig = rk ? (award || String(rk)) : '';
+      const isFirstPaint = (tdRank.dataset.sig === undefined);
+      const rankChanged = !isFirstPaint && sig !== '' && tdRank.dataset.sig !== sig;
+      tdRank.dataset.sig = sig;
+
       if (!rk) {
         tdRank.innerHTML = '<span style="color:#c0c4cc">—</span>';
       } else {
-        const award = awardMap[row.id];
         if (award) {
           const cls = award === '第1名' ? 'g1' : award === '第2名' ? 'g2' : 'g3';
           tdRank.innerHTML = `<span class="rank-tag ${cls}">${award}</span>`;
         } else {
           tdRank.innerHTML = `<span class="rank-tag plain">${rk}</span>`;
+        }
+        if (rankChanged) {
+          const tag = tdRank.firstElementChild;
+          if (tag) { tag.classList.remove('pop'); void tag.offsetWidth; tag.classList.add('pop'); }
+          tr.classList.remove('rank-flash');
+          void tr.offsetWidth;
+          tr.classList.add('rank-flash');
         }
       }
     }

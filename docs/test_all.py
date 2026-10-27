@@ -172,12 +172,26 @@ def main():
                 pg.click('button:has-text("导出 Excel")')
             tmp = os.path.join(tempfile.gettempdir(), 'test_export.xls')
             dl.value.save_as(tmp)
-            html = open(tmp, encoding='utf-8-sig').read()
-            heads = re.findall(r'<th>([^<]+)</th>', html)
+
+            # 导出的是真 .xlsx（zip 包），从 sheet1.xml 里取表头，
+            # 不能当纯文本读（旧写法用 utf-8 解码会报 0x96 错误）
+            import zipfile
+            heads = []
+            with zipfile.ZipFile(tmp) as z:
+                sheet = z.read('xl/worksheets/sheet1.xml').decode('utf-8')
+                rows = re.findall(r'<row[^>]*>(.*?)</row>', sheet, re.S)
+                if len(rows) >= 2:
+                    heads = re.findall(r'<t[^>]*>([^<]*)</t>', rows[1])
+
             # 只勾了 序号/节目名称/平均分/名次（分数修正、最终成绩是独立勾选，此处未勾）
+            # 注：平均分列的标签取决于 state.showAdjust
+            #     勾选「分数修正」时叫「平均分」，未勾选时叫「最终成绩」，
+            #     两种都是同一列，断言按列语义匹配，不写死标签。
+            avg_label = '平均分' if pg.evaluate("() => !!state.showAdjust") else '最终成绩'
             ck("按勾选导出列数", len(heads) == 4, f"{len(heads)} 列: {heads}")
             ck("含序号/节目名称/平均分/名次",
-               all(h in heads for h in ['序号','节目名称','平均分','名次']), str(heads))
+               all(h in heads for h in ['序号','节目名称',avg_label,'名次']),
+               f"期望平均分列={avg_label} 实得 {heads}")
             ck("未勾选时不导出分数修正", '分数修正' not in heads, str(heads))
         except Exception as e:
             ck("导出 Excel", False, str(e)[:60])
