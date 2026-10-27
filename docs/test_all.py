@@ -150,6 +150,9 @@ def main():
                 save(); renderBody();
             }""")
             pg.wait_for_timeout(150)
+            # v7.0：导入区已改为右侧抽屉，需先打开抽屉才能操作 textarea
+            pg.evaluate("() => openImportDrawer()")
+            pg.wait_for_timeout(350)
             pg.fill("#importBox", text)
             pg.click('button:has-text("导入到表格")')
             pg.wait_for_timeout(250)

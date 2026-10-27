@@ -1146,6 +1146,111 @@ td.adjust .adj-input {
   /* 序号列在手机上收窄，把宽度让给分数 */
   thead th.fixed-col, tbody td.fixed-col { min-width: 44px; }
 }
+
+  /* ============================================================
+     v7.0 导入抽屉（2026-10-27）
+     表单很长 → 抽屉而不是常驻面板，背后列表还在，焦点不丢
+     ============================================================ */
+  .drawer-mask {
+    position: fixed; inset: 0; z-index: 9990;
+    background: rgba(23,24,28,.32);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    opacity: 0; visibility: hidden;
+    transition: opacity .28s cubic-bezier(.4,0,.2,1), visibility .28s;
+  }
+  .drawer-mask.show { opacity: 1; visibility: visible; }
+
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 9991;
+    width: 480px; max-width: 92vw;
+    background: #fff;
+    box-shadow: -12px 0 44px -16px rgba(23,24,28,.42);
+    display: flex; flex-direction: column;
+    transform: translateX(100%);
+    transition: transform .28s cubic-bezier(.4,0,.2,1);
+    will-change: transform;
+  }
+  .drawer.show { transform: translateX(0); }
+
+  .drawer-head {
+    flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px 13px;
+    border-bottom: 1px solid #eef0f4;
+  }
+  .drawer-title {
+    font-size: 15px; font-weight: 700; color: #17181c;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .drawer-title .d-ico { font-size: 17px; }
+  .drawer-close {
+    flex: 0 0 auto;
+    width: 30px; height: 30px; padding: 0;
+    border: none; background: #f4f5f7;
+    border-radius: 8px; cursor: pointer;
+    font-size: 17px; line-height: 1; color: #646a73;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .drawer-close:hover { background: #e8eaee; color: #17181c; }
+
+  .drawer-body {
+    flex: 1 1 auto; overflow-y: auto;
+    padding: 16px 18px 20px;
+  }
+  .drawer-body textarea {
+    width: 100%; min-height: 260px;
+    border: 1px solid #d9dde3; border-radius: 9px;
+    padding: 11px 13px; font-family: inherit; font-size: 13px;
+    line-height: 1.7; resize: vertical; color: #17181c;
+  }
+  .drawer-body textarea:focus {
+    outline: none; border-color: #3370ff;
+    box-shadow: 0 0 0 3px rgba(51,112,255,.12);
+  }
+  .drawer-foot {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    padding: 13px 18px 16px;
+    border-top: 1px solid #eef0f4;
+    background: #fbfbfc;
+  }
+  .drawer-foot .d-spacer { flex: 1; }
+  .drawer-hint {
+    font-size: 12px; color: #8f959e; line-height: 1.75; margin-top: 10px;
+  }
+  .drawer-hint b { color: #646a73; }
+  .draft-tip {
+    display: none;
+    font-size: 11.5px; color: #0f7b3f;
+    background: #f0faf4; border-radius: 6px;
+    padding: 5px 9px; margin-bottom: 10px;
+  }
+  .draft-tip.show { display: block; }
+
+  /* 手机竖屏：抽屉铺满 */
+  @media screen and (max-width: 640px) {
+    .drawer { width: 100%; max-width: 100%; }
+    .drawer-body textarea { min-height: 200px; }
+  }
+
+  /* 活动题目：常驻小标签，不靠 placeholder */
+  .field-label {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12.5px; font-weight: 600; color: #646a73;
+    margin-bottom: 6px;
+  }
+  .field-label .q {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #e8eaee; color: #646a73;
+    font-size: 10px; font-weight: 700; cursor: help;
+  }
+
+  /* 撤销/重做禁用态：不可点 */
+  button:disabled { pointer-events: none; }
+  button:disabled:hover { transform: none; box-shadow: none; }
 </style>
 </head>
 <body>
@@ -1267,6 +1372,10 @@ td.adjust .adj-input {
   <!-- ================= 导入区 ================= -->
   <div class="panel no-print">
     <div class="panel-title">活动题目</div>
+    <div class="field-label">
+      <span>活动题目</span>
+      <span class="q" title="这里填的文字会显示在表格正上方的大标题，并随 Excel / 图片 / 打印一起导出。留空则用默认标题「评分表」。">?</span>
+    </div>
     <div class="btnrow">
       <input type="text" id="titleInput" class="title-import" placeholder="输入活动题目，例如：某某活动评分表" oninput="onTitleInput()">
       <button onclick="resetTitle()">恢复默认</button>
@@ -1278,20 +1387,14 @@ td.adjust .adj-input {
 
   <div class="panel no-print">
     <div class="panel-title">导入节目名单</div>
-    <textarea id="importBox" placeholder="从 Excel / Word 表格直接复制粘贴到这里即可。
-
-每行一个节目，列的顺序：序号(可省) 节目名称 表演团队 选送单位
-例：
-1	《示例节目一》	示例团队一	示例单位A
-2	《示例节目二》	示例团队二	示例单位B"></textarea>
-    <div class="btnrow" style="margin-top:8px">
-      <button class="primary" onclick="doImport()" title="导入节目名单（Ctrl+I / F5）">导入到表格</button>
-      <button onclick="document.getElementById('importBox').value=''">清空输入框</button>
+    <div class="btnrow">
+      <button class="primary" id="btnOpenImport" onclick="openImportDrawer()"
+              title="打开导入抽屉（Ctrl+I / F5）">📋 导入节目单</button>
       <span id="importCount" style="font-size:12px;color:#8f959e">等待粘贴…</span>
     </div>
     <div class="import-hint">
-      兼容分隔符：<b>制表符</b>（Excel/Word 复制默认）、<b>逗号</b>、<b>中文逗号</b>、<b>顿号</b>、<b>竖线</b>、<b>分号</b>、<b>两个以上连续空格</b>。<br>
-      首列如果全是纯数字，会自动识别为「序号」并跳过。
+      支持从 <b>Excel / Word</b> 直接粘贴，自动识别制表符、逗号、顿号、竖线、分号等分隔符。<br>
+      打开抽屉后粘贴即可，<b>内容会自动存草稿</b>，手滑关掉也不会丢。
     </div>
   </div>
 
@@ -1357,6 +1460,34 @@ td.adjust .adj-input {
     </div>
   </div>
 
+</div>
+
+<!-- ================= 导入抽屉（v7.0）================= -->
+<div class="drawer-mask" id="drawerMask" onclick="closeImportDrawer()"></div>
+<div class="drawer" id="importDrawer" role="dialog" aria-modal="false" aria-labelledby="drawerTitle">
+  <div class="drawer-head">
+    <div class="drawer-title" id="drawerTitle"><span class="d-ico">📋</span>导入节目名单</div>
+    <button class="drawer-close" onclick="closeImportDrawer()" title="关闭（Esc）">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="draft-tip" id="draftTip">已恢复上次未导入的草稿</div>
+    <textarea id="importBox" placeholder="从 Excel / Word 表格直接复制粘贴到这里即可。
+
+每行一个节目，列的顺序：序号(可省) 节目名称 表演团队 选送单位
+例：
+1	《示例节目一》	示例团队一	示例单位A
+2	《示例节目二》	示例团队二	示例单位B"></textarea>
+    <div class="drawer-hint">
+      兼容分隔符：<b>制表符</b>（Excel/Word 复制默认）、<b>逗号</b>、<b>中文逗号</b>、<b>顿号</b>、<b>竖线</b>、<b>分号</b>、<b>两个以上连续空格</b>。<br>
+      首列如果全是纯数字，会自动识别为「序号」并跳过。
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="primary" onclick="doImport()" title="导入节目名单（Ctrl+Enter）">导入到表格</button>
+    <button onclick="clearImportDraft()" title="清空输入框并删除草稿">清空输入框</button>
+    <span class="d-spacer"></span>
+    <button onclick="closeImportDrawer()">关闭</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -4207,6 +4338,92 @@ function doImport() {
   } else {
     toast(`已填入表格 ${filled} 行`);
   }
+
+  // v7.0：导入成功后清草稿并关抽屉（数据已经进表格，草稿留着只会误导）
+  dropImportDraft();
+  closeImportDrawer();
+}
+
+/* ============================================================
+   v7.0 导入抽屉 + 草稿自动保存
+   设计依据（弹窗分层）：
+     · 表单很长 → 抽屉，背后列表还在，焦点不丢
+     · 填表的浮层必须加草稿自动保存，手一滑数据全没是大忌
+     · 退出方式要有多条：右上角 X / 点遮罩 / Esc
+   ============================================================ */
+const IMPORT_DRAFT_KEY = 'judge_import_draft';   // 独立键，不影响 judge_score_v2
+let _draftTimer = null;
+
+function openImportDrawer() {
+  const d = document.getElementById('importDrawer');
+  const m = document.getElementById('drawerMask');
+  if (!d || !m) return;
+
+  d.classList.add('show');
+  m.classList.add('show');
+  document.body.classList.add('drawer-open');
+
+  // 恢复草稿
+  let draft = '';
+  try { draft = localStorage.getItem(IMPORT_DRAFT_KEY) || ''; } catch (e) {}
+  const box = document.getElementById('importBox');
+  const tip = document.getElementById('draftTip');
+  if (box && draft && !box.value.trim()) {
+    box.value = draft;
+    if (tip) tip.classList.add('show');
+  }
+  updateImportCount();
+
+  // 聚焦到输入框，方便直接粘贴
+  setTimeout(() => { try { box && box.focus(); } catch (e) {} }, 260);
+}
+
+function closeImportDrawer() {
+  const d = document.getElementById('importDrawer');
+  const m = document.getElementById('drawerMask');
+  if (d) d.classList.remove('show');
+  if (m) m.classList.remove('show');
+  document.body.classList.remove('drawer-open');
+  const tip = document.getElementById('draftTip');
+  if (tip) tip.classList.remove('show');
+}
+
+function isImportDrawerOpen() {
+  const d = document.getElementById('importDrawer');
+  return !!(d && d.classList.contains('show'));
+}
+
+/* 草稿：input 事件 debounce 500ms 存 localStorage */
+function scheduleDraftSave() {
+  if (_draftTimer) clearTimeout(_draftTimer);
+  _draftTimer = setTimeout(() => {
+    const box = document.getElementById('importBox');
+    if (!box) return;
+    const v = box.value;
+    try {
+      if (v && v.trim()) localStorage.setItem(IMPORT_DRAFT_KEY, v);
+      else localStorage.removeItem(IMPORT_DRAFT_KEY);
+    } catch (e) { /* localStorage 满了也不影响主流程 */ }
+  }, 500);
+}
+
+function clearImportDraft() {
+  const box = document.getElementById('importBox');
+  if (box) box.value = '';
+  try { localStorage.removeItem(IMPORT_DRAFT_KEY); } catch (e) {}
+  const tip = document.getElementById('draftTip');
+  if (tip) tip.classList.remove('show');
+  updateImportCount();
+  toast('已清空输入框和草稿');
+}
+
+function dropImportDraft() {
+  try { localStorage.removeItem(IMPORT_DRAFT_KEY); } catch (e) {}
+  const box = document.getElementById('importBox');
+  if (box) box.value = '';
+  const tip = document.getElementById('draftTip');
+  if (tip) tip.classList.remove('show');
+  updateImportCount();
 }
 
 function updateImportCount() {
@@ -5842,15 +6059,18 @@ function esc(s) {
   renderHead();
   renderBody();
 
-  // 导入框事件
+  // 导入框事件（v7.0：input 同时存草稿）
   const box = document.getElementById('importBox');
-  box.addEventListener('input', updateImportCount);
-  box.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      doImport();
-    }
-  });
+  if (box) {
+    box.addEventListener('input', () => { updateImportCount(); scheduleDraftSave(); });
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        doImport();
+      }
+      if (e.key === 'Escape') { e.preventDefault(); closeImportDrawer(); }
+    });
+  }
   updateImportCount();
 
   if (hasData && state.rows.length) {
